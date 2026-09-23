@@ -1,5 +1,5 @@
 """
-test08/main.py
+agent-lite/main.py
 
 FastAPI 入口 — 创建 app + lifespan + CORS + 日志配置
 """
@@ -34,7 +34,7 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),                                        # 控制台
         logging.FileHandler(
-            os.path.join(_log_dir, "test08.log"), encoding="utf-8",     # 持久化文件
+            os.path.join(_log_dir, "agent-lite.log"), encoding="utf-8",     # 持久化文件
         ),
     ],
 )
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    logger.info("test08 启动中...")
+    logger.info("agent-lite 启动中...")
 
     # 加载 .env
     load_dotenv(
@@ -75,13 +75,13 @@ async def lifespan(app: FastAPI):
     logger.info("工具总数：%d（本地 %d + 远程 %d）",
                 len(app.state.all_tools), len(LOCAL_TOOLS), len(remote_tools))
 
-    logger.info("test08 启动完成，浏览器打开 http://localhost:8000 开始对话")
+    logger.info("agent-lite 启动完成，浏览器打开 http://localhost:8000 开始对话")
     yield  # ← 服务运行期间停在这
 
     # 关闭 MCP 连接
     logger.info("正在关闭 MCP 连接...")
     await app.state.mcp_cleanup()
-    logger.info("test08 已关闭")
+    logger.info("agent-lite 已关闭")
 
 
 # ============================================================================
@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
 # ============================================================================
 
 app = FastAPI(
-    title="test08 — AI Agent Plus",
+    title="agent-lite — AI Agent",
     description="手写 Agent 循环 + HybridMemory + ChromaDB RAG + SSE 流式输出",
     version="0.1.0",
     docs_url="/docs",

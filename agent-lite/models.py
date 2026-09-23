@@ -1,5 +1,5 @@
 """
-test08/models.py
+agent-lite/models.py
 
 存放 Pydantic 模型，供 FastAPI 调用
 """

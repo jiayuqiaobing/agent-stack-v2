@@ -1,5 +1,5 @@
 """
-test08/mcp_server.py
+agent-lite/mcp_server.py
 
 MCP 协议服务端 — 暴露工具给外部 Agent 调用
 运行方式：python mcp_server.py（独立进程，stdio 传输）
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # MCP 实例初始化
 # ============================================================================
 
-mcp = FastMCP("test08_agent_tools")
+mcp = FastMCP("agent-lite_tools")
 
 
 # ============================================================================
@@ -71,5 +71,5 @@ def _format_day(d: dict) -> str:
 # ============================================================================
 
 if __name__ == "__main__":
-    print("🚀 test08 MCP Server 启动（stdio 模式）")
+    print("🚀 agent-lite MCP Server 启动（stdio 模式）")
     mcp.run(transport="stdio")

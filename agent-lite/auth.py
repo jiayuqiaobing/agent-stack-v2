@@ -1,5 +1,5 @@
 """
-test08/auth.py
+agent-lite/auth.py
 
 API Key 鉴权 — 保护 /chat、/sessions 等接口不被裸调用
 用法：在路由装饰器里加 dependencies=[Depends(verify_api_key)]

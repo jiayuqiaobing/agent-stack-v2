@@ -1,5 +1,5 @@
 """
-test08/memory.py
+agent-lite/memory.py
 
 HybridMemory类的定义，agent的记忆系统
 """

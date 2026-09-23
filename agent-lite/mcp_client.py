@@ -1,5 +1,5 @@
 """
-test08/mcp_client.py
+agent-lite/mcp_client.py
 
 MCP 客户端 — 连接本地 stdio + 远程 SSE 服务器，发现工具
 在 main.py lifespan 中调用 setup_mcp_connections() 建立连接

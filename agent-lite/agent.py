@@ -1,5 +1,5 @@
 """
-test08/agent.py
+agent-lite/agent.py
 
 Agent 核心循环 — 非流式 + 流式（SSE）
 """

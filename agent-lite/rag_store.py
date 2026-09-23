@@ -1,5 +1,5 @@
 """
-test08/rag_store.py
+agent-lite/rag_store.py
 
 向量存储模块 — 文本 → Embedding → ChromaDB 持久化
 Embedding 使用本地 bge-small-zh-v1.5 模型（fastembed 加载），不依赖外部 API

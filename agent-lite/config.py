@@ -1,5 +1,5 @@
 """
-test08/config.py
+agent-lite/config.py
 
 OpenAI 客户端初始化，其他文件调用使用   from config import client/aclient
 """
