@@ -29,7 +29,13 @@ logs/
 agent-lite/logs/
 chroma_db/
 agent-lite/chroma_db/
-eval/results/
+# eval/results/ 下：只保留基线，其余（每次运行的历史）不入库
+#
+# ⚠️ 这里有个 gitignore 的坑：**不能写成 `eval/results/` + `!baseline.json`** ——
+#    排除整个目录后，git 根本不会进入该目录，目录内的 `!` 放行规则无法生效。
+#    正确做法是先放行目录、再排除目录内的内容，最后对目标文件放行。
+eval/results/*
+!eval/results/baseline.json
 
 # ============================================================
 # ⚠️ 刻意不忽略：agent-lite/models/
