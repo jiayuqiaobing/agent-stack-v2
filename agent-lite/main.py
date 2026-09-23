@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
-from observability import trace
+from observability import metrics, trace
 from router import router
 from mcp_client import setup_mcp_connections
 from tools_local import LOCAL_TOOLS
@@ -147,6 +147,25 @@ async def health():
         "status": "healthy",
         "version": "0.1.0",
     }
+
+
+# ============================================================================
+# 指标接口（见 docs/3-可观测数据模型.md 第 8 节）
+# ============================================================================
+#
+# 只读聚合，不改任何既有接口。数据源是 trace 写的 span JSONL。
+# 窗口可选 1h / 6h / 24h / 7d，默认 24h。
+
+
+@app.get("/metrics")
+async def get_metrics(window: str = "24h"):
+    """聚合指标 —— 请求量、延迟分位、token 与缓存命中率、工具成功率、RAG 指标"""
+    if window not in metrics.WINDOW_HOURS:
+        return {
+            "error": f"不支持的 window: {window!r}",
+            "supported": sorted(metrics.WINDOW_HOURS),
+        }
+    return metrics.build_report(window)
 
 
 # 挂载静态文件（聊天界面）—— 放最后，否则覆盖所有 / 请求
