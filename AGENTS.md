@@ -37,6 +37,12 @@
 
 **自查清单**：硬编码模型名/路径/key？接口变更登记了吗？有 `except: pass` 吞异常吗（v1 因此 RAG 静默失效）？新依赖进 `requirements.txt` 了吗？留了调试 `print` 吗？
 
+**⚠️ 写入/复制源码文件后，必须验证它能被解释器解析**（不能只看"文件存在 + 大小合理"）：
+```bash
+python -c "import ast,pathlib; ast.parse(pathlib.Path('<文件>').read_text(encoding='utf-8'))"
+```
+> 踩过的坑：**PowerShell 的 `>` 重定向默认写 UTF-16**，复制出来的 .py 文件看着大小正常但 Python 根本读不了。复制源码优先用 **Git Bash** 而不是 PowerShell。详见 `LESSONS.md`。
+
 ---
 
 ## 上游断线怎么办（实测发生过）

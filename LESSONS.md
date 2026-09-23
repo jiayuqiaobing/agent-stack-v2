@@ -120,6 +120,28 @@
 
 ---
 
+## [2026-09-23] PowerShell 的 `>` 重定向写出 UTF-16 文件
+
+- **症状**：用 `git show ... > agent-lite/config.py` 复制源码，
+  文件存在、大小也"对"，但 Python 读它报
+  `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0`
+- **根因**：**PowerShell 的 `>` 重定向默认输出 UTF-16LE**（带 BOM），不是 UTF-8。
+  同一个文件：UTF-8 是 663 字节，PowerShell 写出来是 1270 字节
+- **修法**：改用 **Git Bash** 的重定向（默认 UTF-8）：
+  ```bash
+  git -C D:/Python/janyu2cs_projects/agent-stack show add-dockerfiles:agent-lite/config.py > agent-lite/config.py
+  ```
+  或复制后转换编码
+- **如何避免**：
+  1. **复制源码文件后，必须验证它能被解释器解析**，不能只查"文件存在 + 大小合理"：
+     ```bash
+     python -c "import ast,pathlib; ast.parse(pathlib.Path('agent-lite/xxx.py').read_text(encoding='utf-8'))"
+     ```
+  2. **文件大小异常（约为正常值 2 倍）就是 UTF-16 的信号**
+  3. `file <文件名>` 能直接看出来：`UTF-8 text` vs `UTF-16, little-endian text`
+
+---
+
 ## 变更记录
 
 | 日期 | 新增 |
@@ -127,3 +149,4 @@
 | 2026-09-23 | 初版：从 v1 项目记忆迁移 7 条已知坑 |
 | 2026-09-23 | 新增：跨 shell 环境变量不传递导致 key 读取失败 |
 | 2026-09-23 | 新增：test-env 环境损坏，统一改用 my-agent-env |
+| 2026-09-23 | 新增：PowerShell `>` 重定向写出 UTF-16 文件 |
