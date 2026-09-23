@@ -1,0 +1,28 @@
+services:
+  agent-lite:
+    build:
+      context: ./agent-lite
+      dockerfile: Dockerfile
+    container_name: agent-lite
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./agent-lite/logs:/app/logs
+      - ./agent-lite/chroma_db:/app/chroma_db
+      - ./agent-lite/models:/app/models
+    restart: unless-stopped
+
+  go-gateway:
+    build:
+      context: ./go-gateway
+      dockerfile: Dockerfile
+    container_name: go-gateway
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - agent-lite
+    restart: unless-stopped

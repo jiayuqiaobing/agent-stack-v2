@@ -1,0 +1,16 @@
+# 模型（91MB，通过 docker-compose volume 挂载，不打进镜像）
+models/
+
+# 运行时数据（通过 volume 挂载）
+chroma_db/
+logs/
+
+# Python 编译缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 测试与诊断脚本（运行时不需要）
+.pytest_cache/
+tests/
+check_rag.py

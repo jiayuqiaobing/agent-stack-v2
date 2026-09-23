@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>test08 AI Agent</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: system-ui, sans-serif; background:#1a1a2e; color:#e0e0e0; height:100vh; display:flex; flex-direction:column; max-width:800px; margin:0 auto; }
+  #messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; }
+  .msg { max-width:85%; padding:12px 16px; border-radius:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+  .msg.user { align-self:flex-end; background:#0f3460; }
+  .msg.assistant { align-self:flex-start; background:#16213e; }
+  .msg .token-info { display:block; margin-top:8px; padding-top:8px; border-top:1px solid #333; font-size:0.8em; color:#888; }
+  #welcome { padding:20px 24px; background:#16213e; border-radius:12px; font-size:14px; line-height:1.8; color:#aaa; }
+  #welcome strong { color:#e0e0e0; }
+  #welcome code { background:#0f3460; padding:2px 6px; border-radius:4px; color:#e94560; }
+  #welcome a { color:#e94560; }
+  #input-area { display:flex; padding:16px; gap:8px; background:#16213e; border-top:1px solid #333; }
+  #input { flex:1; padding:12px; border-radius:8px; border:none; background:#0f3460; color:#e0e0e0; font-size:15px; resize:none; }
+  #input:focus { outline:2px solid #e94560; }
+  #send { padding:12px 24px; border:none; border-radius:8px; background:#e94560; color:#fff; font-size:15px; cursor:pointer; }
+  #send:disabled { opacity:0.5; cursor:not-allowed; }
+  #clear-mem { padding:12px 16px; border:none; border-radius:8px; background:#555; color:#ccc; font-size:13px; cursor:pointer; }
+  #clear-mem:hover { background:#e94560; color:#fff; }
+  .loading::after { content:"..."; animation: dots 1.5s steps(4,end) infinite; }
+  @keyframes dots { 0%,20% { content:""; } 40% { content:"."; } 60% { content:".."; } 80%,100% { content:"..."; } }
+  h1 { text-align:center; padding:16px; font-size:18px; color:#e94560; }
+  #header { display:flex; align-items:center; justify-content:center; gap:16px; }
+  #mode-toggle { display:flex; align-items:center; gap:6px; font-size:13px; color:#aaa; cursor:pointer; user-select:none; }
+  #mode-toggle .switch { width:40px; height:22px; background:#555; border-radius:11px; position:relative; transition:background .3s; }
+  #mode-toggle .switch::after { content:""; width:18px; height:18px; background:#fff; border-radius:50%; position:absolute; top:2px; left:2px; transition:left .3s; }
+  #mode-toggle.stream .switch { background:#e94560; }
+  #mode-toggle.stream .switch::after { left:20px; }
+  #mode-toggle .label-stream, #mode-toggle .label-normal { color:#888; }
+  #mode-toggle.stream .label-stream { color:#e94560; }
+  #mode-toggle:not(.stream) .label-normal { color:#e94560; }
+  #api-key { padding:6px 10px; border-radius:8px; border:none; background:#0f3460; color:#e0e0e0; font-size:12px; width:140px; }
+  #api-key:focus { outline:2px solid #e94560; }
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>test08 AI Agent</h1>
+  <div id="mode-toggle" class="stream" onclick="toggleMode()" title="切换流式/非流式">
+    <span class="label-stream">流式</span>
+    <span class="switch"></span>
+    <span class="label-normal">完整</span>
+  </div>
+  <input id="api-key" type="password" placeholder="API Key（可选）" title="服务端启用鉴权时填写，保存在浏览器本地" oninput="saveApiKey(this.value)">
+</div>
+<div id="messages">
+  <div id="welcome">
+    <strong>我是一个 AI 助手，可以用以下工具帮你：</strong><br>
+    · <code>calculate</code> 数学计算（四则运算、幂运算）<br>
+    · <code>read_file</code> 读取项目文件、列出目录<br>
+    · <code>get_time</code> 查询当前日期和时间<br>
+    · <code>get_weather</code> 查询全球城市天气<br>
+    · 远程工具：金融数据查询、网站检测<br><br>
+    <strong>API 端点说明：</strong><br>
+    · <code>POST /chat/stream</code> — SSE 流式对话（本页面使用，逐字输出）<br>
+    · <code>POST /chat</code> — 非流式对话（一次性返回完整回复）<br>
+    · <a href="/docs" target="_blank">/docs</a> — Swagger API 文档 &nbsp;|&nbsp;
+    <a href="/health" target="_blank">/health</a> — 健康检查
+  </div>
+</div>
+<div id="input-area">
+  <textarea id="input" rows="2" placeholder="输入消息..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
+  <button id="send" onclick="send()">发送</button>
+  <button id="clear-mem" onclick="clearMemory()" title="清空当前会话记忆">清空</button>
+</div>
+
+<script>
+const messages = document.getElementById('messages');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const modeToggle = document.getElementById('mode-toggle');
+
+let isStream = true;  // 默认流式
+let sessionId = null;  // 后端分配
+
+// --- API Key 鉴权（可选）---
+function saveApiKey(v) { localStorage.setItem('api_key', v); }
+function getHeaders() {
+  const key = localStorage.getItem('api_key') || '';
+  const h = { 'Content-Type': 'application/json' };
+  if (key) h['Authorization'] = 'Bearer ' + key;
+  return h;
+}
+// 恢复上次填的 key
+document.getElementById('api-key').value = localStorage.getItem('api_key') || '';
+
+function toggleMode() {
+  isStream = !isStream;
+  modeToggle.classList.toggle('stream', isStream);
+}
+
+function addMsg(role, content) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = content;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+  return div;
+}
+
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendBtn.disabled = true;
+
+  addMsg('user', text);
+  const assistantDiv = addMsg('assistant', '');
+  assistantDiv.classList.add('loading');
+
+  try {
+    if (isStream) {
+      await sendStream(text, assistantDiv);
+    } else {
+      await sendNormal(text, assistantDiv);
+    }
+  } catch (e) {
+    assistantDiv.textContent = '请求失败: ' + e.message;
+    assistantDiv.classList.remove('loading');
+  }
+
+  messages.scrollTop = messages.scrollHeight;
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// --- 流式（SSE）---
+async function sendStream(text, assistantDiv) {
+  const resp = await fetch('/chat/stream', {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ message: text, session_id: sessionId }),
+  });
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      try {
+        const event = JSON.parse(line.slice(6));
+        if (event.type === 'session') {
+          sessionId = event.session_id;
+        } else if (event.type === 'delta') {
+          assistantDiv.classList.remove('loading');
+          if (event.content.startsWith('\n\n---\n')) {
+            const span = document.createElement('span');
+            span.className = 'token-info';
+            span.textContent = event.content.replace(/^[\s\n-]+/, '');
+            assistantDiv.appendChild(span);
+          } else {
+            assistantDiv.textContent += event.content;
+          }
+        } else if (event.type === 'tool_call') {
+          assistantDiv.classList.remove('loading');
+          assistantDiv.textContent += '\n[工具调用: ' + event.name + ']';
+        } else if (event.type === 'done') {
+          if (!assistantDiv.textContent.trim()) {
+            assistantDiv.textContent = event.reply || '(空回复)';
+          }
+          assistantDiv.classList.remove('loading');
+        } else if (event.type === 'error') {
+          assistantDiv.textContent = '错误: ' + event.message;
+          assistantDiv.classList.remove('loading');
+        }
+      } catch (e) { /* 忽略解析错误 */ }
+    }
+  }
+}
+
+// --- 非流式（一次性 JSON）---
+async function sendNormal(text, assistantDiv) {
+  const resp = await fetch('/chat', {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ message: text, session_id: sessionId }),
+  });
+
+  const data = await resp.json();
+  assistantDiv.classList.remove('loading');
+
+  if (data.status === 'ok') {
+    if (data.session_id) sessionId = data.session_id;
+    assistantDiv.textContent = data.reply;
+  } else {
+    assistantDiv.textContent = '错误: ' + (data.error || '未知');
+  }
+}
+
+async function clearMemory() {
+  if (!sessionId) return;
+  await fetch('/sessions/' + sessionId, { method: 'DELETE', headers: getHeaders() });
+  sessionId = null;  // 下次请求自动分配新 session
+  messages.innerHTML = '';
+  location.reload();
+}
+</script>
+</body>
+</html>
