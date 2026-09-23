@@ -57,3 +57,4 @@ Thumbs.db
 *.tmp
 *.bak
 *~
+.cheapai_key

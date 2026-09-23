@@ -86,6 +86,36 @@ def judge(reply: str, check: dict) -> bool:
     return False
 
 
+# 上游不可用的特征（中转站实测会间歇性 503，见 LESSONS.md）
+_TRANSIENT_MARKERS = ("503", "502", "504", "暂时不可用", "稍后重试", "timeout", "Timeout", "rate limit", "429")
+
+
+def _is_transient(exc: Exception) -> bool:
+    msg = str(exc)
+    return any(m in msg for m in _TRANSIENT_MARKERS)
+
+
+async def ask_with_retry(agent_loop, user_message: str, memory, tools, waits=(0, 10, 30)):
+    """带重试的提问 —— 上游断流时不至于让整条评估白跑
+
+    评估结果必须可信：一次 503 导致的失败会被记成"用例不过"，
+    那评估就变成了在测上游稳定性，而不是在测 agent。
+    """
+    last_exc = None
+    for i, w in enumerate(waits):
+        if w:
+            await asyncio.sleep(w)
+        try:
+            return await agent_loop(
+                user_message=user_message, memory=memory, tools=tools, tool_session_map=None
+            )
+        except Exception as e:
+            last_exc = e
+            if not _is_transient(e) or i == len(waits) - 1:
+                raise
+    raise last_exc
+
+
 async def run_case(case: dict) -> dict:
     """跑单个用例：多轮依次提问，取**最后一轮**的回复判定"""
     from config import client
@@ -102,9 +132,7 @@ async def run_case(case: dict) -> dict:
 
     replies = []
     for turn in case["turns"]:
-        reply = await agent_loop(
-            user_message=turn, memory=memory, tools=LOCAL_TOOLS, tool_session_map=None
-        )
+        reply = await ask_with_retry(agent_loop, turn, memory, LOCAL_TOOLS)
         replies.append(reply)
 
     passed = judge(replies[-1], case["check"])
@@ -287,9 +315,13 @@ def main() -> int:
     if args.limit:
         cases = cases[: args.limit]
 
+    # ⚠️ 必须先加载 .env 再检查 —— 否则在 shell 里没手动 export key 的用户
+    #    会看到一个假的"未设置 API key"错误（这个 bug 真实发生过）。
+    from config import client, aclient  # noqa: F401  import 触发 load_dotenv
+
     if not os.getenv("OPENAI_API_KEY"):
         print("[FAIL] 未设置 OPENAI_API_KEY —— 真实评估需要模型凭据")
-        print("       只想校验数据集的话，加 --dry-run")
+        print("       检查 .env 是否存在且含该键；只想校验数据集就加 --dry-run")
         return 1
 
     print(f"开始评估 {len(cases)} 条用例……")
