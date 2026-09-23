@@ -23,7 +23,10 @@
 ## 每个任务的固定节奏
 
 ```
-0. 读 LESSONS.md
+0. 读 LESSONS.md，并在动手前跑一遍「自查清单」
+   （见 https://github.com/jiayuqiaobing/ai-coding-playbook/blob/master/DECISION-TREE.md 的 0.3 节）
+   ⚠️ 最高优先级：等待任何操作时，必须有上限 + 存活探针（进程/日志/产物）
+      卡死是最不可容忍的失败 —— 它什么都不说，安静地烧时间
 1. 先写独立验证脚本（放 agent-lite/verify/，不要碰 tests/）
 2. 写实现
 3. 跑验证脚本 → 必须通过
