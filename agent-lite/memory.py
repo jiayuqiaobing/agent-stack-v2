@@ -7,6 +7,7 @@ HybridMemory类的定义，agent的记忆系统
 
 from datetime import datetime
 from rag_store import RAGStore
+from observability import trace
 import logging
 
 
@@ -190,6 +191,9 @@ class HybridMemory:
 
         conversation_text = "\n".join(text_parts)
 
+        span = trace.make_span("memory.summarize", "memory", session_id=self.session_id,
+                               attributes={"before_count": len(messages)})
+
         try:
             response = await aclient.chat.completions.create(
                 model=MODEL_NAME,
@@ -204,10 +208,15 @@ class HybridMemory:
             )
             summary = response.choices[0].message.content or "(摘要生成失败)"
             logger.info("摘要生成完成，长度：%d 字符", len(summary))
+            span["attributes"]["summary_len"] = len(summary)
+            trace.finish_span(span, status="ok")
             return summary
         except Exception as e:
             logger.error("摘要生成失败：%s", e)
+            trace.finish_span(span, status="error", error=e)
             return f"(摘要生成出错：{e})"
+        finally:
+            trace.export_span(span)
 
     def search_memory(self,keyword:str) -> str:
         """

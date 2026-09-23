@@ -197,15 +197,24 @@ async def agent_loop_stream(
 
         context = await memory.build_context()
 
-        stream = await aclient.chat.completions.create(
-            model=model,
-            messages=context,
-            tools=tools or None,
-            max_tokens=4096,
-            temperature=0,
-            stream=True,
-            stream_options={"include_usage": True},
-        )
+        # LLM span（流式路径）—— 与非流式保持同一契约
+        llm_span = trace.make_span("llm.chat", "llm", session_id=memory.session_id,
+                                   attributes={"model": model})
+        try:
+            stream = await aclient.chat.completions.create(
+                model=model,
+                messages=context,
+                tools=tools or None,
+                max_tokens=4096,
+                temperature=0,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            trace.finish_span(llm_span, status="ok")
+        except Exception as e:
+            trace.finish_span(llm_span, status="error", error=e)
+            trace.export_span(llm_span)
+            raise
 
         # 流式收集 — 跟 test06 同逻辑，但用 async for + 逐 chunk yield
         collected_content = ""
@@ -248,6 +257,16 @@ async def agent_loop_stream(
         if stream_usage:
             total_prompt += stream_usage.prompt_tokens
             total_completion += stream_usage.completion_tokens
+
+        # 流结束 —— 补齐 llm span 的 token 数据
+        _details = getattr(stream_usage, "prompt_tokens_details", None) if stream_usage else None
+        llm_span["attributes"].update({
+            "prompt_tokens": getattr(stream_usage, "prompt_tokens", 0) or 0,
+            "completion_tokens": getattr(stream_usage, "completion_tokens", 0) or 0,
+            "cache_hit_tokens": getattr(_details, "cached_tokens", 0) or 0,
+            "has_tool_calls": bool(collected_tool_calls and collected_tool_calls[0]["function"]["name"]),
+        })
+        trace.export_span(llm_span)
 
         # 流式收集完毕 — 判断是否工具调用
         if collected_tool_calls and collected_tool_calls[0]["function"]["name"]:

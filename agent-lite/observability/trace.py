@@ -91,6 +91,9 @@ def now() -> float:
 
 _current_trace_id: ContextVar[Optional[str]] = ContextVar("current_trace_id", default=None)
 _current_span_id: ContextVar[Optional[str]] = ContextVar("current_span_id", default=None)
+# session_id 也走上下文：契约要求每个 span 都带它，
+# 靠调用方逐个传太容易漏（且漏了不会报错，只会静默丢数据）
+_current_session_id: ContextVar[Optional[str]] = ContextVar("current_session_id", default=None)
 
 
 def get_trace_id() -> Optional[str]:
@@ -101,6 +104,11 @@ def get_trace_id() -> Optional[str]:
 def get_current_span_id() -> Optional[str]:
     """取当前 span 的 span_id，用作新 span 的 parent_span_id"""
     return _current_span_id.get()
+
+
+def get_session_id() -> Optional[str]:
+    """取当前上下文的 session_id（未进入 trace 时为 None）"""
+    return _current_session_id.get()
 
 
 @dataclass
@@ -115,34 +123,89 @@ class SpanContext:
 
     span_id: str
     trace_id: str
+    session_id: str | None = None
     _trace_token: Any = None
     _span_token: Any = None
+    _session_token: Any = None
 
     def __enter__(self) -> "SpanContext":
         self._trace_token = _current_trace_id.set(self.trace_id)
         self._span_token = _current_span_id.set(self.span_id)
+        if self.session_id is not None:
+            self._session_token = _current_session_id.set(self.session_id)
         return self
 
     def __exit__(self, *exc_info) -> None:
         # 逆序恢复，保证嵌套层级正确
+        if self._session_token is not None:
+            _current_session_id.reset(self._session_token)
         if self._span_token is not None:
             _current_span_id.reset(self._span_token)
         if self._trace_token is not None:
             _current_trace_id.reset(self._trace_token)
 
 
-def span_context(span_id: str, trace_id: str) -> SpanContext:
+def span_context(span_id: str, trace_id: str, session_id: str | None = None) -> SpanContext:
     """创建（不进入）一个 span 上下文，配合 with 使用"""
-    return SpanContext(span_id=span_id, trace_id=trace_id)
+    return SpanContext(span_id=span_id, trace_id=trace_id, session_id=session_id)
 
 
-def begin_trace(incoming_trace_id: str | None = None) -> tuple[str, str, SpanContext]:
-    """开启一条新 trace
+class TraceContext:
+    """一条 trace 的上下文，进入时把根 span 设为"当前 span"
+
+    这样深层函数（工具调用、RAG 检索）在 make_span 时会自动把根 span 当父节点，
+    不需要层层传参。
+    """
+
+    def __init__(self, root_span: dict):
+        self.root_span = root_span
+        self.trace_id = root_span["trace_id"]
+        self._ctx = span_context(
+            root_span["span_id"], root_span["trace_id"], root_span.get("session_id")
+        )
+
+    def __enter__(self) -> dict:
+        self._ctx.__enter__()
+        return self.root_span
+
+    def __exit__(self, *exc_info) -> None:
+        self._ctx.__exit__(*exc_info)
+
+
+def start_trace(
+    name: str = "agent.turn",
+    incoming_trace_id: str | None = None,
+    session_id: str = "default",
+) -> TraceContext:
+    """开启一条新 trace 并创建根 span
+
+    用法：
+        with start_trace(session_id=sid) as root:
+            ...                                  # 深层函数自动挂到 root 下
+        finish_span(root)                        # 退出后结束根 span
+        export_span(root)
 
     参数：
         incoming_trace_id: 来自 HTTP header X-Trace-Id，非法则忽略并重新生成
 
-    返回：(trace_id, root_span_id, 已进入的上下文)
+    ⚠️ 曾出过的 bug：根 span 的 parent 变成它自己。
+       原因是 make_span 默认从上下文取父节点，而上下文里存的正是根 span。
+       现在根 span 在这里显式创建（parent_span_id=None），不再有歧义。
+    """
+    trace_id = incoming_trace_id if is_valid_trace_id(incoming_trace_id) else new_trace_id()
+    if incoming_trace_id and not is_valid_trace_id(incoming_trace_id):
+        logger.warning("X-Trace-Id 格式非法，已丢弃并重新生成：%r", incoming_trace_id)
+
+    root_span = make_span(name, "agent", trace_id=trace_id,
+                          parent_span_id=None, session_id=session_id)
+    return TraceContext(root_span)
+
+
+def begin_trace(incoming_trace_id: str | None = None):
+    """[兼容旧用法] 返回 (trace_id, root_span_id, 上下文)
+
+    ⚠️ 已不推荐 —— 它只给 id 不给 span 对象，调用方无法把子 span 挂到根上。
+    新代码请用 start_trace()，它直接返回根 span。
     """
     trace_id = incoming_trace_id if is_valid_trace_id(incoming_trace_id) else new_trace_id()
     if incoming_trace_id and not is_valid_trace_id(incoming_trace_id):
@@ -157,12 +220,16 @@ def begin_trace(incoming_trace_id: str | None = None) -> tuple[str, str, SpanCon
 # ============================================================================
 
 
+# 哨兵：区分「调用方没说 parent」（用上下文）和「调用方明确要求根 span，parent=None」
+_UNSET = object()
+
+
 def make_span(
     name: str,
     kind: str,
     trace_id: str | None = None,
-    parent_span_id: str | None = None,
-    session_id: str = "default",
+    parent_span_id: Any = _UNSET,
+    session_id: Any = _UNSET,
     attributes: dict | None = None,
 ) -> dict:
     """创建一个 span（此时尚未结束，end_time / duration_ms 为 None）
@@ -172,19 +239,39 @@ def make_span(
                    ⚠️ 不要把用户输入拼进 name，否则指标无法聚合
         kind:      agent | llm | tool | rag | memory
         trace_id:  缺省取当前上下文
-        parent_span_id: 缺省取当前上下文中的 span_id
+        parent_span_id:
+            · 不传（默认）→ 取当前上下文里的 span_id（嵌套场景）
+            · 显式传 None → **强制为根 span**，父节点为空
+            · 传具体 id  → 显式指定父节点
         attributes: 按 kind 定义的业务字段
+
+    为什么需要哨兵值区分：
+        曾出过一个 bug —— 根 span 的 parent 变成它自己。
+        原因是 begin_trace 把上下文的当前 span 设成了根 span，
+        而 make_span 默认从上下文取 parent，于是"自己当自己的爹"。
+        语义上必须能区分「没说」和「明确要求是根」。
     """
     if kind not in VALID_KINDS:
         raise ValueError(f"非法 span kind: {kind!r}，必须是 {sorted(VALID_KINDS)} 之一")
 
+    if parent_span_id is _UNSET:
+        parent = get_current_span_id()
+    else:
+        parent = parent_span_id        # 显式 None 或显式 id
+
+    # session_id 同理：不传则从上下文继承（契约要求每个 span 都带上它）
+    if session_id is _UNSET:
+        sess = get_session_id() or "default"
+    else:
+        sess = session_id
+
     return {
         "trace_id": trace_id or get_trace_id() or new_trace_id(),
         "span_id": new_span_id(),
-        "parent_span_id": parent_span_id if parent_span_id is not None else get_current_span_id(),
+        "parent_span_id": parent,
         "name": name,
         "kind": kind,
-        "session_id": session_id,
+        "session_id": sess,
         "start_time": now(),
         "end_time": None,
         "duration_ms": None,
