@@ -1,0 +1,153 @@
+{
+  "trials": 5,
+  "results": [
+    {
+      "tag": "A",
+      "trial": 0,
+      "calls": 3,
+      "prompt_tokens": 2438,
+      "cache_hits": 384,
+      "hit_rate": 0.15750615258408532,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    },
+    {
+      "tag": "B",
+      "trial": 0,
+      "calls": 3,
+      "prompt_tokens": 2437,
+      "cache_hits": 256,
+      "hit_rate": 0.10504718916700861,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    },
+    {
+      "tag": "A",
+      "trial": 1,
+      "calls": 3,
+      "prompt_tokens": 2438,
+      "cache_hits": 1536,
+      "hit_rate": 0.6300246103363413,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    },
+    {
+      "tag": "B",
+      "trial": 1,
+      "calls": 7,
+      "prompt_tokens": 17291,
+      "cache_hits": 4608,
+      "hit_rate": 0.266497021571916,
+      "rag_hits": [
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 7
+    },
+    {
+      "tag": "A",
+      "trial": 2,
+      "calls": 3,
+      "prompt_tokens": 2438,
+      "cache_hits": 1664,
+      "hit_rate": 0.682526661197703,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    },
+    {
+      "tag": "B",
+      "trial": 2,
+      "calls": 5,
+      "prompt_tokens": 5520,
+      "cache_hits": 1536,
+      "hit_rate": 0.2782608695652174,
+      "rag_hits": [
+        5,
+        5,
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 5
+    },
+    {
+      "tag": "A",
+      "trial": 3,
+      "calls": 3,
+      "prompt_tokens": 2438,
+      "cache_hits": 2304,
+      "hit_rate": 0.9450369155045119,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    },
+    {
+      "tag": "B",
+      "trial": 3,
+      "calls": 3,
+      "prompt_tokens": 2432,
+      "cache_hits": 896,
+      "hit_rate": 0.3684210526315789,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    },
+    {
+      "tag": "A",
+      "trial": 4,
+      "calls": 3,
+      "prompt_tokens": 2438,
+      "cache_hits": 2304,
+      "hit_rate": 0.9450369155045119,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    },
+    {
+      "tag": "B",
+      "trial": 4,
+      "calls": 3,
+      "prompt_tokens": 2438,
+      "cache_hits": 2176,
+      "hit_rate": 0.8925348646431501,
+      "rag_hits": [
+        5,
+        5,
+        5
+      ],
+      "rag_effective": 3
+    }
+  ],
+  "mean_A": 0.6720262510254307,
+  "mean_B": 0.3821521995157742
+}

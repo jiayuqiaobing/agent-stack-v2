@@ -1,0 +1,8 @@
+{
+  "label": "after",
+  "model": "grok-4.6",
+  "calls": 9,
+  "prompt_tokens": 7494,
+  "cache_hits": 2816,
+  "hit_rate": 0.3758
+}

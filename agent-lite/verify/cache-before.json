@@ -1,0 +1,8 @@
+{
+  "label": "before",
+  "model": "grok-4.6",
+  "calls": 9,
+  "prompt_tokens": 7592,
+  "cache_hits": 4608,
+  "hit_rate": 0.607
+}

@@ -5,6 +5,7 @@ HybridMemory类的定义，agent的记忆系统
 """
 
 
+import os
 from datetime import datetime
 from rag_store import RAGStore
 from observability import trace
@@ -93,36 +94,62 @@ class HybridMemory:
     async def build_context(self) -> list:
         """
         构建上下文
-        上下文结构：system_prompt（100% KV-Cache命中） + RAG语义检索的长期记忆（同一问题可能缓存命中） + 较早短期记忆（过了摘要窗口，暂时不变） + 最近短期记忆（频繁变化，但模型注意力最强） + 当前用户问题（最后，最敏感）
-        KV-Cache 前缀命中（不变放前面省钱） + Lost in the Middle（重要的放最后）
-        """
-        context=[{"role":"system","content":self.system_prompt}]
 
-        #  拼接用户当前问题
+        结构（**顺序是有讲究的**）：
+            [0] system_prompt           ← 全 session 恒定
+            [1..n] short_term           ← 只增不改，前缀稳定
+            [n+1] RAG 检索到的历史记忆   ← 随查询变化，**放最后**
+            末尾  当前用户问题            ← 在 short_term 里，天然靠后
+
+        两条原则决定这个顺序：
+
+        1. **KV-Cache 前缀命中**：缓存按前缀匹配，一旦中间有内容变化，
+           它**后面**的全部失效。所以恒定内容放前面，易变内容放后面。
+
+        2. **Lost in the Middle**：模型对上下文首尾的注意力最强、中间最弱。
+           当前问题在末尾（强），相关记忆紧挨着它（较强）。
+
+        ⚠️ 曾经的错误做法：把 RAG 结果插在 [1] 的位置（system_prompt 之后）。
+           那样每个 query 一变，它后面的整个 short_term 前缀都失效，
+           缓存命中率被无谓拉低。改动记录见 verify/cache-before.json 与 cache-after.json。
+        """
+        context = [{"role": "system", "content": self.system_prompt}]
+
+        #  短期记忆原样追加（只增不改 → 前缀稳定 → 可缓存）
+        context.extend(self.short_term)
+
+        #  拼接用户当前问题（用于 RAG 检索的关键词）
         user_query = ""
-        for msg in reversed(self.short_term):  #  反向搜索最近的用户问题
+        for msg in reversed(self.short_term):
             if msg["role"] == "user":
-                user_query = msg.get("content","")
+                user_query = msg.get("content", "")
                 break
 
-        #  语义检索最相关的长期记忆（top-5）
+        #  语义检索最相关的长期记忆（top-5），追加到**最后**
         if user_query and self.rag is not None:
             try:
-                relevant = await self.rag.search(user_query,k=5)
+                relevant = await self.rag.search(user_query, k=5)
             except Exception:
-                logger.warning("RAG 检索失败，跳过",exc_info=True)
+                logger.warning("RAG 检索失败，跳过", exc_info=True)
                 relevant = []
             if relevant:
                 logger.debug("RAG 检索命中 %d 条结果，查询：%s", len(relevant), user_query[:50])
                 context.append({
                     "role": "system",
-                    "content":"以下是历史相关记忆：\n" + "\n".join(
+                    "content": "以下是历史相关记忆：\n" + "\n".join(
                         f"- {m}" for m in relevant
-                    )
+                    ),
                 })
 
-        #  短期记忆原样追加
-        context.extend(self.short_term)
+        # ── 消融实验开关（仅用于 verify/ab_cache_layout.py）──
+        # 把 RAG 块挪回 system_prompt 之后的老位置，用于对照测量。
+        # 生产路径永远不会开这个开关；默认 False = 正确的新布局。
+        _legacy = os.getenv("AGENT_LITE_LEGACY_CTX_ORDER") == "1"
+        if _legacy and len(context) > 1 and context[-1].get("role") == "system" \
+                and str(context[-1].get("content", "")).startswith("以下是历史相关记忆"):
+            rag_block = context.pop()
+            context.insert(1, rag_block)
+
         logger.debug("上下文构建完成，共 %d 条消息", len(context))
         return context
 
