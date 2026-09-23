@@ -11,7 +11,7 @@ services:
     volumes:
       - ./agent-lite/logs:/app/logs
       - ./agent-lite/chroma_db:/app/chroma_db
-      - ./agent-lite/models:/app/models
+      - ./agent-lite/models:/app/models      # 本地 embedding 模型，保证离线可部署
     restart: unless-stopped
 
   go-gateway:
@@ -23,6 +23,10 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    environment:
+      # 容器内必须用服务名，不能用 localhost（localhost 指向网关自己）
+      # 修复历史：v1 写死 localhost，导致容器部署时网关永远连不上 agent-lite
+      AGENT_LITE_HOST: agent-lite
     depends_on:
       - agent-lite
     restart: unless-stopped
