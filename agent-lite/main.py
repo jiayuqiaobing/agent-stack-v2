@@ -9,11 +9,12 @@ import os
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
+from observability import trace
 from router import router
 from mcp_client import setup_mcp_connections
 from tools_local import LOCAL_TOOLS
@@ -103,6 +104,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============================================================================
+# trace 中间件 — X-Trace-Id 的读写（见 docs/3-可观测数据模型.md 第 6.1 节）
+# ============================================================================
+#
+# 契约要求：
+#   1. 客户端可自带 X-Trace-Id（便于跨系统串联）—— 但必须校验格式，非法值丢弃重新生成
+#   2. agent **必须**在响应头回写 X-Trace-Id，便于调用方对账
+#
+# 可观测是旁路：本中间件不得改变任何业务行为。
+
+
+@app.middleware("http")
+async def trace_middleware(request: Request, call_next):
+    incoming = trace.trace_id_from_headers(request.headers)
+    trace_id, root_span_id, ctx = trace.begin_trace(incoming)
+
+    with ctx:
+        request.state.trace_id = trace_id
+        request.state.span_id = root_span_id
+        response = await call_next(request)
+
+    response.headers[trace.TRACE_ID_HEADER] = trace_id
+    return response
+
 
 # 注册路由
 app.include_router(router)

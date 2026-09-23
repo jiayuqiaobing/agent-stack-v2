@@ -1,0 +1,1 @@
+{"trace_id": "285b789672cbaf02780966f9f351b753", "span_id": "38ab05d20aa4a344", "parent_span_id": null, "name": "llm.chat", "kind": "llm", "session_id": "default", "start_time": 1790154072.391158, "end_time": 1790154072.391209, "duration_ms": 0.051, "status": "ok", "error": null, "attributes": {"model": "test"}}
