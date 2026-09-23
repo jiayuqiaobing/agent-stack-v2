@@ -178,7 +178,7 @@ class HybridMemory:
         使用模型压缩short_term,返回压缩的记忆文本或者失败提示
         message:需要压缩的短期记忆部分
         """
-        from config import aclient
+        from config import aclient, MODEL_NAME
 
         #  提取信息
         text_parts = []
@@ -192,7 +192,7 @@ class HybridMemory:
 
         try:
             response = await aclient.chat.completions.create(
-                model="deepseek-chat",
+                model=MODEL_NAME,
                 messages=[
                     {"role":    "system",
                      "content": "你是一个摘要助手，请用简短的中文总结以下对话的关键信息，包括'讨论了什么话题、得出了什么结论、用户透露了什么重要信息（如名字、偏好等）。控制在200字以内。'"},

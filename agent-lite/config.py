@@ -25,3 +25,7 @@ aclient = AsyncOpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     base_url=os.getenv("OPENAI_BASE_URL","https://api.openai.com/v1")
 )
+
+#  模型名 —— 业务代码中禁止硬编码，一律读这里（见 docs/2-产品规格.md 阶段一 P0 1.3）
+#  改这里即可整体切换模型，不需要改任何业务代码
+MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-v4-pro")

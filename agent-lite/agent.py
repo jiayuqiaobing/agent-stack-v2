@@ -6,7 +6,7 @@ Agent 核心循环 — 非流式 + 流式（SSE）
 
 import json
 import logging
-from config import client, aclient
+from config import client, aclient, MODEL_NAME
 from memory import HybridMemory
 from tools_local import TOOL_REGISTRY, LOCAL_TOOLS, execute_tool
 from mcp import ClientSession
@@ -40,7 +40,7 @@ async def agent_loop(
     memory: HybridMemory,
     tools: list | None = None,
     tool_session_map: dict | None = None,
-    model: str = "deepseek-chat",
+    model: str = MODEL_NAME,
     max_steps: int = 8,
 ) -> str:
     """
@@ -128,7 +128,7 @@ async def agent_loop_stream(
     memory: HybridMemory,
     tools: list | None = None,
     tool_session_map: dict | None = None,
-    model: str = "deepseek-chat",
+    model: str = MODEL_NAME,
     max_steps: int = 8,
 ):
     """
