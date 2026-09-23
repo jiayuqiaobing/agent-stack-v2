@@ -1,0 +1,11 @@
+{
+  "upstreams": [
+    {
+      "name": "agent-lite-primary",
+      "url": "http://localhost:8000",
+      "priority": 0
+    }
+  ],
+  "timeout_seconds": 10,
+  "buffer_limit": 262144
+}

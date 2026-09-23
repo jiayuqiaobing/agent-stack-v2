@@ -1,5 +1,5 @@
 # ========== 构建阶段 ==========
-FROM golang:1.26-alpine AS builder
+FROM docker.m.daocloud.io/library/golang:1.26-alpine AS builder
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o gateway main.go
 
 # ========== 运行阶段 ==========
-FROM alpine:3.21
+FROM docker.m.daocloud.io/library/alpine:3.21
 
 WORKDIR /app
 

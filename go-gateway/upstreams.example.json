@@ -1,0 +1,38 @@
+{
+  "_说明": [
+    "上游配置示例 —— 演示 failover 怎么写。",
+    "实际用哪个文件由环境变量 GATEWAY_CONFIG 决定（默认 upstreams.json）。",
+    "",
+    "字段：",
+    "  name     上游名字，出错时会打进日志，也是 X-Served-By 的值",
+    "  url      上游地址",
+    "  priority 数字越小越先试。前面的挂了才轮到后面的",
+    "  enabled  可选，false 表示跳过这个上游（不删配置就能临时摘掉）",
+    "",
+    "  timeout_seconds  单个上游的响应头超时（秒）。0 = 不限制（SSE 需要）",
+    "  buffer_limit     缓冲上限（字节）。超过就转为直通，不再 failover",
+    "                   —— 这是为了让 SSE 长连接不至于把内存吃光"
+  ],
+
+  "upstreams": [
+    {
+      "name": "primary",
+      "url": "http://localhost:8000",
+      "priority": 0
+    },
+    {
+      "name": "backup",
+      "url": "http://localhost:8001",
+      "priority": 1
+    },
+    {
+      "name": "临时摘掉的上游",
+      "url": "http://localhost:8002",
+      "priority": 2,
+      "enabled": false
+    }
+  ],
+
+  "timeout_seconds": 10,
+  "buffer_limit": 262144
+}

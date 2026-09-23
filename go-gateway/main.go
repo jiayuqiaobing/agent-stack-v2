@@ -4,11 +4,13 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -36,11 +38,21 @@ func main() {
 	defer logFile.Close()
 	log.SetOutput(io.MultiWriter(os.Stdout, logFile))
 
-	log.Printf("Agent-Lite 地址：%s", config.AgentLiteURL)
 	log.Printf("网关监听端口：%s", config.GatewayPort)
 
-	// 创建反向代理 handler
-	proxyHandler, err := proxy.New(config.AgentLiteURL)
+	// 读取上游配置（支持多上游 failover）
+	upstreamCfg, err := config.LoadUpstreams()
+	if err != nil {
+		log.Fatalf("加载上游配置失败：%v", err)
+	}
+	names := make([]string, len(upstreamCfg.Upstreams))
+	for i, u := range upstreamCfg.Upstreams {
+		names[i] = fmt.Sprintf("%s(%s,prio=%d)", u.Name, u.URL, u.Priority)
+	}
+	log.Printf("上游配置：%d 个 — %s", len(upstreamCfg.Upstreams), strings.Join(names, " | "))
+
+	// 创建带 failover 的反向代理 handler
+	proxyHandler, err := proxy.New(upstreamCfg)
 	if err != nil {
 		log.Fatalf("反向代理初始化失败：%v", err)
 	}
@@ -85,22 +97,26 @@ func main() {
 		_ = local // 后续可扩展返回更丰富的健康信息
 	})
 
+	// proxy.New 返回的是 http.HandlerFunc（不绑定任何 Web 框架），
+	// 这里适配成 gin.HandlerFunc。gin.Context.Writer 本身就实现了
+	// http.Flusher（gin.ResponseWriter 接口含 Flush），所以 SSE 流式不受影响。
+	ginProxy := func(c *gin.Context) {
+		proxyHandler(c.Writer, c.Request)
+	}
+
 	// Agent 核心 API — 反向代理
-	r.POST("/chat", proxyHandler)
-	r.POST("/chat/stream", proxyHandler)
-	r.GET("/sessions", proxyHandler)
-	r.DELETE("/sessions/:id", proxyHandler)
+	r.POST("/chat", ginProxy)
+	r.POST("/chat/stream", ginProxy)
+	r.GET("/sessions", ginProxy)
+	r.DELETE("/sessions/:id", ginProxy)
 
 	// Swagger 文档 — 反向代理
-	r.Any("/docs/*any", proxyHandler)
-	r.GET("/openapi.json", proxyHandler)
+	r.Any("/docs/*any", ginProxy)
+	r.GET("/openapi.json", ginProxy)
 
 	// 聊天界面 + 静态文件 — 通配反向代理
-	r.Any("/", proxyHandler)
-	r.Any("/:any", func(c *gin.Context) {
-		// 排除已注册的显式路由，其余透传
-		proxyHandler(c)
-	})
+	r.Any("/", ginProxy)
+	r.Any("/:any", ginProxy)
 
 	// ============================================
 	// 启动
