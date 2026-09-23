@@ -1,11 +1,18 @@
+# agent-stack v2 的容器编排
+#
+# ⚠️ 容器名与端口都带 v2 后缀，是为了**与 v1 并存**：
+#    v1 的项目（D:\Python\janyu2cs_projects\agent-lite）已经在用
+#    容器名 `agent-lite` 和端口 8000，从 2026-07-19 起持续运行。
+#    这里换个名字，两边互不干扰。
+#    容器内部的互相访问仍走服务名（agent-lite / go-gateway），不受影响。
 services:
   agent-lite:
     build:
       context: ./agent-lite
       dockerfile: Dockerfile
-    container_name: agent-lite
+    container_name: agent-lite-v2
     ports:
-      - "8000:8000"
+      - "8100:8000"          # 宿主机 8100 → 容器 8000（避让 v1 的 8000）
     env_file:
       - .env
     volumes:
@@ -18,9 +25,9 @@ services:
     build:
       context: ./go-gateway
       dockerfile: Dockerfile
-    container_name: go-gateway
+    container_name: go-gateway-v2
     ports:
-      - "3000:3000"
+      - "3100:3000"          # 宿主机 3100 → 容器 3000（避让常用端口）
     env_file:
       - .env
     environment:
