@@ -11,6 +11,7 @@ from memory import HybridMemory
 from tools_local import TOOL_REGISTRY, LOCAL_TOOLS, execute_tool
 from mcp import ClientSession
 from mcp.client.sse import sse_client
+from observability import trace
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +71,31 @@ async def agent_loop(
 
         context = await memory.build_context()
 
-        response = await aclient.chat.completions.create(
-            model=model,
-            messages=context,
-            tools=tools or None,
-            max_tokens=4096,
-            temperature=0,
-        )
+        # LLM span —— cache_hit_tokens 验证 v1 的前缀缓存设计是否真的生效
+        llm_span = trace.make_span("llm.chat", "llm", session_id=memory.session_id,
+                                   attributes={"model": model})
+        try:
+            response = await aclient.chat.completions.create(
+                model=model,
+                messages=context,
+                tools=tools or None,
+                max_tokens=4096,
+                temperature=0,
+            )
+            _usage = getattr(response, "usage", None)
+            _details = getattr(_usage, "prompt_tokens_details", None) if _usage else None
+            llm_span["attributes"].update({
+                "prompt_tokens": getattr(_usage, "prompt_tokens", 0) or 0,
+                "completion_tokens": getattr(_usage, "completion_tokens", 0) or 0,
+                "cache_hit_tokens": getattr(_details, "cached_tokens", 0) or 0,
+                "has_tool_calls": bool(response.choices[0].message.tool_calls),
+            })
+            trace.finish_span(llm_span, status="ok")
+        except Exception as e:
+            trace.finish_span(llm_span, status="error", error=e)
+            raise
+        finally:
+            trace.export_span(llm_span)
 
         msg = response.choices[0].message
 
@@ -103,13 +122,36 @@ async def agent_loop(
 
             logger.info("工具调用：%s", func_name)
 
+            # 工具 span —— name 用低基数形式 tool.{名}，参数只记长度不记内容
+            is_local = func_name in TOOL_REGISTRY
+            tool_span = trace.make_span(
+                f"tool.{func_name}", "tool",
+                attributes={
+                    "tool_name": func_name,
+                    "source": "local" if is_local else ("mcp" if tool_session_map else "unknown"),
+                    "args_size": len(str(func_args)),
+                },
+            )
+
             # 路由：本地工具 > MCP 远程工具
-            if func_name in TOOL_REGISTRY:
-                result = await execute_tool(func_name, func_args)
-            elif tool_session_map and func_name in tool_session_map:
-                result = await _call_mcp_tool(tool_session_map[func_name], func_name, func_args)
-            else:
-                result = f"错误: 未知工具 '{func_name}'"
+            try:
+                if is_local:
+                    result = await execute_tool(func_name, func_args)
+                elif tool_session_map and func_name in tool_session_map:
+                    result = await _call_mcp_tool(tool_session_map[func_name], func_name, func_args)
+                else:
+                    result = f"错误: 未知工具 '{func_name}'"
+                ok = not str(result).startswith("错误") and not str(result).startswith("远程工具")
+                tool_span["attributes"]["success"] = ok
+                tool_span["attributes"]["error_type"] = None if ok else "tool_error"
+                trace.finish_span(tool_span, status="ok" if ok else "error")
+            except Exception as e:
+                tool_span["attributes"]["success"] = False
+                tool_span["attributes"]["error_type"] = type(e).__name__
+                trace.finish_span(tool_span, status="error", error=e)
+                raise
+            finally:
+                trace.export_span(tool_span)
 
             logger.debug("工具结果 %s：%s", func_name, str(result)[:200])
             memory.add("tool", str(result), tool_call_id=tc.id)
@@ -233,13 +275,34 @@ async def agent_loop_stream(
 
                 yield {"type": "tool_call", "name": func_name, "args": tc["function"]["arguments"]}
 
-                # 路由工具
-                if func_name in TOOL_REGISTRY:
-                    result = await execute_tool(func_name, func_args)
-                elif tool_session_map and func_name in tool_session_map:
-                    result = await _call_mcp_tool(tool_session_map[func_name], func_name, func_args)
-                else:
-                    result = f"错误: 未知工具 '{func_name}'"
+                # 工具 span（流式路径）—— 与非流式保持同一契约
+                is_local = func_name in TOOL_REGISTRY
+                tool_span = trace.make_span(
+                    f"tool.{func_name}", "tool", session_id=memory.session_id,
+                    attributes={
+                        "tool_name": func_name,
+                        "source": "local" if is_local else ("mcp" if tool_session_map else "unknown"),
+                        "args_size": len(tc["function"]["arguments"] or ""),
+                    },
+                )
+                try:
+                    if is_local:
+                        result = await execute_tool(func_name, func_args)
+                    elif tool_session_map and func_name in tool_session_map:
+                        result = await _call_mcp_tool(tool_session_map[func_name], func_name, func_args)
+                    else:
+                        result = f"错误: 未知工具 '{func_name}'"
+                    ok = not str(result).startswith("错误") and not str(result).startswith("远程工具")
+                    tool_span["attributes"]["success"] = ok
+                    tool_span["attributes"]["error_type"] = None if ok else "tool_error"
+                    trace.finish_span(tool_span, status="ok" if ok else "error")
+                except Exception as e:
+                    tool_span["attributes"]["success"] = False
+                    tool_span["attributes"]["error_type"] = type(e).__name__
+                    trace.finish_span(tool_span, status="error", error=e)
+                    raise
+                finally:
+                    trace.export_span(tool_span)
 
                 memory.add("tool", str(result), tool_call_id=tc["id"])
 

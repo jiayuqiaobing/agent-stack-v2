@@ -14,6 +14,7 @@ from agent import agent_loop, agent_loop_stream
 from memory import HybridMemory
 from config import client
 from auth import verify_api_key
+from observability import trace
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,9 @@ def _get_or_create_session(
 async def chat(body: ChatRequest, request: Request):
     """非流式对话 — 一次性返回完整回复"""
     sid, memory = _get_or_create_session(body.session_id, request.app.state.all_tools)
+
+    # 根 span —— 一次完整的 agent 往返（见 docs/3-可观测数据模型.md 第 5 节）
+    span = trace.make_span("agent.turn", "agent", session_id=sid)
     try:
         reply = await agent_loop(
             user_message=body.message,
@@ -111,10 +115,17 @@ async def chat(body: ChatRequest, request: Request):
             tools=request.app.state.all_tools,
             tool_session_map=request.app.state.tool_session_map,
         )
+        trace.finish_span(span, status="ok")
+        span["attributes"]["terminated_by"] = "reply"
         return ChatResponse(reply=reply, status="ok", session_id=sid)
     except Exception as e:
         logger.error("非流式请求失败：%s", e, exc_info=True)
+        trace.finish_span(span, status="error", error=e)
+        span["attributes"]["terminated_by"] = "error"
         return ChatResponse(reply="", status="error", error=str(e), session_id=sid)
+    finally:
+        # 可观测是旁路：写 span 失败绝不能影响业务返回
+        trace.export_span(span)
 
 
 @router.post("/chat/stream", dependencies=[Depends(verify_api_key)])

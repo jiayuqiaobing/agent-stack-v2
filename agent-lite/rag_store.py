@@ -16,12 +16,17 @@ import chromadb
 # 国内直连 HuggingFace 常超时，默认走 hf-mirror 镜像；可用环境变量 HF_ENDPOINT 覆盖。
 # 注意：必须在 import fastembed 之前设置，因为 fastembed 会触发 import huggingface_hub，
 # 而后者在 import 时就读取 HF_ENDPOINT 环境变量。
+#
+# ⚠️ 因此本文件里**任何第三方 import 都必须放在这三行之后**（包括 observability），
+#    否则它们的传递依赖可能提前触发 huggingface_hub 的 import，使镜像设置失效。
 os.environ["HF_ENDPOINT"] = os.getenv("HF_ENDPOINT") or "https://hf-mirror.com"
 # 禁用 Xet 存储后端：hf-mirror 不支持 Xet 的 CAS 服务器（会报 401），改走普通 HTTP 下载
 os.environ["HF_HUB_DISABLE_XET"] = "1"
 os.environ["HF_XET_DISABLE"] = "1"
 
 from fastembed import TextEmbedding
+
+from observability import trace
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +92,20 @@ class RAGStore:
             raise
 
     async def search(self, query: str, k: int = 5) -> list[str]:
-        """语义检索 — 只检索本 session 的记忆（where 过滤），返回最相关的 k 条"""
+        """语义检索 — 只检索本 session 的记忆（where 过滤），返回最相关的 k 条
+
+        埋点：rag.search span。`degraded=True` 表示检索失败并降级为空结果 ——
+        v1 曾因 embedding 静默失效导致 RAG 永远返回空而不报错，
+        这个标记就是防止同类问题再次"静默"。
+        """
+        span = trace.make_span(
+            "rag.search", "rag", session_id=self.session_id,
+            attributes={"k": k, "hit_count": 0, "degraded": False},
+        )
         try:
             count = await asyncio.to_thread(self.collection.count)
             if count == 0:
+                trace.finish_span(span, status="ok")
                 return []
             query_emb = await self._embed(query)
             results = await asyncio.to_thread(
@@ -99,10 +114,18 @@ class RAGStore:
                 n_results=min(k, count),
                 where={"session_id": self.session_id},
             )
-            return results["documents"][0] if results["documents"] else []
-        except Exception:
-            logger.warning("RAGStore 检索失败", exc_info=True)
+            docs = results["documents"][0] if results["documents"] else []
+            span["attributes"]["hit_count"] = len(docs)
+            trace.finish_span(span, status="ok")
+            return docs
+        except Exception as e:
+            # 降级：返回空结果但**必须留下痕迹**，不能静默
+            span["attributes"]["degraded"] = True
+            trace.finish_span(span, status="error", error=e)
+            logger.warning("RAGStore 检索失败（已降级为空结果）", exc_info=True)
             return []
+        finally:
+            trace.export_span(span)
 
     def restore(self) -> list[str]:
         """恢复本 session 的历史摘要（按 session_id 隔离，其他 session 的不返回）"""
