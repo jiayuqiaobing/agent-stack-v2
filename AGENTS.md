@@ -80,8 +80,9 @@ cd agent-lite; python main.py
 git -C D:/Python/janyu2cs_projects/agent-stack show add-dockerfiles:agent-lite/<文件>
 ```
 
-**Python 解释器**：`D:\Miniconda3\envs\test-env\python.exe`
-> ⚠️ `my-agent-env` 依赖不全（会报 `ModuleNotFoundError: chromadb`）。**装包也要装进 test-env。**
+**Python 解释器**：`D:\Miniconda3\envs\my-agent-env\python.exe`
+> ⚠️ **不要用 `test-env`** —— 它已损坏（解释器与标准库被删，仅剩 site-packages）。
+> 详见 `LESSONS.md`。装包也一律装进 `my-agent-env`。
 
 ---
 

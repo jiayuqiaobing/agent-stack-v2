@@ -93,9 +93,37 @@
 
 ---
 
+## [2026-09-23] `test-env` 环境已损坏，全靠 `my-agent-env`
+
+- **症状**：`D:\Miniconda3\envs\test-env\python.exe` 不存在，
+  命令行报 `No such file or directory`
+- **根因**：**不是 python.exe 单独丢失，是整个环境被部分删除**：
+
+  | 检查项 | 状态 |
+  |--------|------|
+  | `python.exe` / `python313.dll` / `DLLs\` | ❌ 缺 |
+  | `Lib\os.py` / `Lib\encodings\`（标准库） | ❌ 缺 |
+  | `conda-meta\*.json`（包记录） | ❌ 全删，只剩 `created_at` 和 `history` |
+  | `Lib\site-packages\`（221 个第三方包） | ✅ 还在，但**没解释器，一个也跑不了** |
+
+- **修法**：**放弃 test-env**（重建成本远高于修另一个）；
+  改为给 `my-agent-env` 补齐依赖：
+  ```
+  D:\Miniconda3\envs\my-agent-env\python.exe -m pip install mcp openai chromadb fastembed pytest pytest-asyncio
+  ```
+- **如何避免**：
+  1. **本项目统一用 `my-agent-env`**（2026-09-23 起）
+  2. **旧文档里"用 test-env"的说明已全部过时** —— 本项目记忆曾写"test-env 依赖全、my-agent-env 不全"，
+     实际**恰好相反**。**记忆也会过时，用之前先验证路径是否存在**
+  3. 判断 conda 环境是否健康：`conda list -n <env>` 有没有正常输出包列表。
+     **只输出表头 = 环境元数据已损坏**
+
+---
+
 ## 变更记录
 
 | 日期 | 新增 |
 |------|------|
 | 2026-09-23 | 初版：从 v1 项目记忆迁移 7 条已知坑 |
 | 2026-09-23 | 新增：跨 shell 环境变量不传递导致 key 读取失败 |
+| 2026-09-23 | 新增：test-env 环境损坏，统一改用 my-agent-env |
