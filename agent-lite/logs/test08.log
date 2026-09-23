@@ -1,0 +1,173 @@
+17:02:03 [INFO] main - test08 启动中...
+17:02:03 [INFO] main - OpenAI API Key 已配置（sk-place...-key）
+17:02:03 [INFO] main - 正在连接 MCP 服务器...
+17:02:04 [WARNING] mcp_client - 本地 MCP 连接失败：Connection closed
+17:02:04 [DEBUG] httpcore2.connection - connect_tcp.started host='127.0.0.1' port=7897 local_address=None timeout=5.0 socket_options=None
+17:02:04 [DEBUG] httpcore2.connection - connect_tcp.failed exception=CancelledError('Cancelled by cancel scope 296a5b81c50')
+17:02:04 [ERROR] asyncio - Task exception was never retrieved
+future: <Task finished name='Task-4' coro=<<async_generator_athrow without __name__>()> exception=RuntimeError('Attempted to exit cancel scope in a different task than it was entered in')>
+  + Exception Group Traceback (most recent call last):
+  |   File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 772, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | BaseExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\mcp\client\stdio.py", line 204, in stdio_client
+    |     yield read_stream, write_stream
+    | GeneratorExit
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\mcp\client\stdio.py", line 200, in stdio_client
+    async with anyio.create_task_group() as tg:
+               ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 778, in __aexit__
+    if self.cancel_scope.__exit__(type(exc), exc, exc.__traceback__):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 457, in __exit__
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: Attempted to exit cancel scope in a different task than it was entered in
+17:02:55 [INFO] main - test08 启动中...
+17:02:55 [INFO] main - OpenAI API Key 已配置（sk-place...-key）
+17:02:55 [INFO] main - 正在连接 MCP 服务器...
+17:02:56 [WARNING] mcp_client - 本地 MCP 连接失败：Connection closed
+17:02:56 [INFO] main - 工具总数：3（本地 3 + 远程 0）
+17:02:56 [INFO] main - test08 启动完成，浏览器打开 http://localhost:8000 开始对话
+17:02:56 [ERROR] asyncio - Task exception was never retrieved
+future: <Task finished name='Task-4' coro=<<async_generator_athrow without __name__>()> exception=RuntimeError('Attempted to exit cancel scope in a different task than it was entered in')>
+  + Exception Group Traceback (most recent call last):
+  |   File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 772, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | BaseExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\mcp\client\stdio.py", line 204, in stdio_client
+    |     yield read_stream, write_stream
+    | GeneratorExit
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\mcp\client\stdio.py", line 200, in stdio_client
+    async with anyio.create_task_group() as tg:
+               ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 778, in __aexit__
+    if self.cancel_scope.__exit__(type(exc), exc, exc.__traceback__):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 457, in __exit__
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: Attempted to exit cancel scope in a different task than it was entered in
+17:03:31 [DEBUG] chromadb.config - Starting component System
+17:03:31 [DEBUG] chromadb.config - Starting component Posthog
+17:03:31 [DEBUG] rag_store - RAGStore 初始化完成（session=f14423f8）
+17:03:31 [INFO] memory - ChromaDB 中无本 session 的历史数据，从零开始
+17:03:31 [INFO] router - 创建新 session：f14423f8（当前共 1 个，工具 3 个）
+17:03:31 [DEBUG] memory - 短期记忆 +1：role=user, content_len=2
+17:03:31 [DEBUG] agent - Step 1/8
+17:03:31 [DEBUG] memory - 上下文构建完成，共 2 条消息
+17:03:31 [DEBUG] openai._base_client - Building HTTP request: method=POST retries_taken=0
+17:03:31 [DEBUG] openai._base_client - Sending HTTP Request: POST
+17:03:31 [DEBUG] httpcore2.connection - connect_tcp.started host='127.0.0.1' port=7897 local_address=None timeout=5.0 socket_options=None
+17:03:31 [DEBUG] httpcore2.connection - connect_tcp.complete return_value=<httpcore2._backends.anyio.AnyIOStream object at 0x000001B1EE093770>
+17:03:31 [DEBUG] httpcore2.http11 - send_request_headers.started request=<Request [b'CONNECT']>
+17:03:31 [DEBUG] httpcore2.http11 - send_request_headers.complete
+17:03:31 [DEBUG] httpcore2.http11 - send_request_body.started request=<Request [b'CONNECT']>
+17:03:31 [DEBUG] httpcore2.http11 - send_request_body.complete
+17:03:31 [DEBUG] httpcore2.http11 - receive_response_headers.started request=<Request [b'CONNECT']>
+17:03:31 [DEBUG] httpcore2.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+17:03:31 [DEBUG] httpcore2.proxy - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001B1CBB5E170> server_hostname='api.deepseek.com' timeout=5.0
+17:03:31 [DEBUG] httpcore2.proxy - start_tls.complete return_value=<httpcore2._backends.anyio.AnyIOStream object at 0x000001B1EE0BD450>
+17:03:31 [DEBUG] httpcore2.http11 - send_request_headers.started request=<Request [b'POST']>
+17:03:31 [DEBUG] httpcore2.http11 - send_request_headers.complete
+17:03:31 [DEBUG] httpcore2.http11 - send_request_body.started request=<Request [b'POST']>
+17:03:31 [DEBUG] httpcore2.http11 - send_request_body.complete
+17:03:31 [DEBUG] httpcore2.http11 - receive_response_headers.started request=<Request [b'POST']>
+17:03:31 [DEBUG] httpcore2.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 401, b'Authorization Required', [(b'Server', b'openresty'), (b'Content-Type', b'application/json'), (b'vary', b'origin, access-control-request-method, access-control-request-headers'), (b'access-control-allow-credentials', b'true'), (b'x-ds-trace-id', b'66c42ea677f7669a0182f2f1857ad83d'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'X-Content-Type-Options', b'nosniff'), (b'Content-Length', b'153'), (b'Connection', b'keep-alive'), (b'Date', b'Wed, 23 Sep 2026 09:03:29 GMT'), (b'EO-LOG-UUID', b'8964934235636825472'), (b'EO-Cache-Status', b'MISS')])
+17:03:31 [INFO] httpx2 - HTTP Request: POST https://api.deepseek.com/v1/chat/completions "HTTP/1.1 401 Authorization Required"
+17:03:31 [DEBUG] httpcore2.http11 - receive_response_body.started request=<Request [b'POST']>
+17:03:31 [DEBUG] httpcore2.http11 - receive_response_body.complete
+17:03:31 [DEBUG] httpcore2.http11 - response_closed.started
+17:03:31 [DEBUG] httpcore2.http11 - response_closed.complete
+17:03:31 [DEBUG] openai._base_client - HTTP Response: POST 401
+17:03:31 [DEBUG] openai._base_client - request_id: None
+17:03:31 [DEBUG] openai._base_client - Encountered an HTTP status error: 401
+17:03:31 [DEBUG] openai._base_client - Not retrying
+17:03:31 [DEBUG] openai._base_client - Re-raising status error
+17:03:31 [ERROR] router - 非流式请求失败：Error code: 401 - {'error': {'message': 'Authentication Fails, Your api key: ****-key is invalid', 'type': 'authentication_error', 'param': None, 'code': 'invalid_request_error'}}
+Traceback (most recent call last):
+  File "D:\Python\janyu2cs_projects\agent-stack-v2\agent-lite\router.py", line 108, in chat
+    reply = await agent_loop(
+            ^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "D:\Python\janyu2cs_projects\agent-stack-v2\agent-lite\agent.py", line 73, in agent_loop
+    response = await aclient.chat.completions.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2949, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+    ...<55 lines>...
+    )
+    ^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\openai\_base_client.py", line 1990, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\openai\_base_client.py", line 1775, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'error': {'message': 'Authentication Fails, Your api key: ****-key is invalid', 'type': 'authentication_error', 'param': None, 'code': 'invalid_request_error'}}
+17:04:07 [INFO] main - test08 启动中...
+17:04:07 [INFO] main - OpenAI API Key 已配置（sk-place...-key）
+17:04:07 [INFO] main - 正在连接 MCP 服务器...
+17:04:07 [WARNING] mcp_client - 本地 MCP 连接失败：Connection closed
+17:04:07 [INFO] main - 工具总数：3（本地 3 + 远程 0）
+17:04:07 [INFO] main - test08 启动完成，浏览器打开 http://localhost:8000 开始对话
+17:04:07 [ERROR] asyncio - Task exception was never retrieved
+future: <Task finished name='Task-4' coro=<<async_generator_athrow without __name__>()> exception=RuntimeError('Attempted to exit cancel scope in a different task than it was entered in')>
+  + Exception Group Traceback (most recent call last):
+  |   File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 772, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | BaseExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\mcp\client\stdio\__init__.py", line 189, in stdio_client
+    |     yield read_stream, write_stream
+    | GeneratorExit
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\mcp\client\stdio\__init__.py", line 183, in stdio_client
+    anyio.create_task_group() as tg,
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 778, in __aexit__
+    if self.cancel_scope.__exit__(type(exc), exc, exc.__traceback__):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Miniconda3\envs\my-agent-env\Lib\site-packages\anyio\_backends\_asyncio.py", line 457, in __exit__
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: Attempted to exit cancel scope in a different task than it was entered in
+17:05:11 [INFO] main - test08 启动中...
+17:05:11 [INFO] main - OpenAI API Key 已配置（sk-place...-key）
+17:05:11 [INFO] main - 正在连接 MCP 服务器...
+17:05:13 [INFO] mcp_client - 本地 MCP：发现 1 个工具
+17:05:13 [INFO] main - 工具总数：4（本地 3 + 远程 1）
+17:05:13 [INFO] main - test08 启动完成，浏览器打开 http://localhost:8000 开始对话

@@ -142,6 +142,44 @@
 
 ---
 
+## [2026-09-23] `pip install mcp` 装成 2.x，代码全崩
+
+- **症状**：服务启动或 `mcp_server.py` 直接运行报
+  `ModuleNotFoundError: No module named 'mcp.server.fastmcp'`，
+  错误信息提示 "This is mcp 2.x, where FastMCP was renamed to MCPServer"
+- **根因**：**装包时没看版本约束**。`requirements.txt` 写的是 `mcp~=1.28.1`，
+  但 `pip install mcp` 装成了 2.2.0，而代码用的是 1.x 的 `FastMCP` API
+- **修法**：
+  ```bash
+  D:\Miniconda3\envs\my-agent-env\python.exe -m pip install "mcp~=1.28.1"
+  ```
+- **如何避免**：**装包要按 `requirements.txt` 的版本约束**，不要裸装包名：
+  ```bash
+  python -m pip install -r agent-lite/requirements.txt
+  ```
+  遇到 `ModuleNotFoundError` 先怀疑**版本不对**，不只是"没装"。
+
+---
+
+## [2026-09-23] MCP 子进程用裸 `python` 启动，解析到错误的解释器
+
+- **症状**：服务能启动，但日志报 `No module named 'mcp'`，
+  本地 MCP 工具一个都发现不了（"本地 MCP 连接失败：Connection closed"）
+- **根因**：`mcp_client.py` 里写死 `"command": "python"`。
+  裸 `python` 解析到 **base 环境的 Python**（`D:\Miniconda3\python.exe`），
+  而依赖装在 `my-agent-env` 里 —— 子进程用的是另一个解释器
+- **修法**：改用 `sys.executable`，保证子进程与当前服务**同一个解释器**：
+  ```python
+  "command": sys.executable,
+  "args": [os.path.join(os.path.dirname(os.path.abspath(__file__)), "mcp_server.py")],
+  ```
+  同时把 `mcp_server.py` 的路径改成**绝对路径**，避免 CWD 变化导致找不到
+- **如何避免**：
+  1. **任何"启动子进程跑 Python 脚本"的地方，一律用 `sys.executable`，不要写 `python`**
+  2. 多环境机器上，裸 `python` / `python3` 指向哪个解释器**永远是个未知数**
+
+---
+
 ## 变更记录
 
 | 日期 | 新增 |
@@ -150,3 +188,5 @@
 | 2026-09-23 | 新增：跨 shell 环境变量不传递导致 key 读取失败 |
 | 2026-09-23 | 新增：test-env 环境损坏，统一改用 my-agent-env |
 | 2026-09-23 | 新增：PowerShell `>` 重定向写出 UTF-16 文件 |
+| 2026-09-23 | 新增：pip 装 mcp 2.x 导致 FastMCP 不可用 |
+| 2026-09-23 | 新增：MCP 子进程用裸 python 启动导致解释器错位 |

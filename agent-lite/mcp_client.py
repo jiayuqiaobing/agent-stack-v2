@@ -7,6 +7,7 @@ MCP 客户端 — 连接本地 stdio + 远程 SSE 服务器，发现工具
 
 import logging
 import os
+import sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.sse import sse_client
@@ -51,8 +52,11 @@ async def setup_mcp_connections():
     """
     local_config = {
         "enabled": True,
-        "command": "python",
-        "args": ["mcp_server.py"],
+        # 必须用 sys.executable 而不是裸 "python"：
+        # 裸 "python" 会解析到系统/base 解释器，可能没装 mcp 依赖（实测踩过）。
+        # 用 sys.executable 保证子进程与当前服务用同一个解释器。
+        "command": sys.executable,
+        "args": [os.path.join(os.path.dirname(os.path.abspath(__file__)), "mcp_server.py")],
     }
 
     # 远程 SSE 服务器（从环境变量读取）
