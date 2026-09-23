@@ -165,6 +165,75 @@ def print_report(summary: dict, results: list[dict], verbose: bool) -> None:
     print()
 
 
+def compare_with_baseline(summary: dict, results: list[dict], baseline_path: Path) -> int:
+    """与基线对比，打印变好/变坏/新增/消失的用例
+
+    这才是评估体系存在的意义：**回答"这次改动是变好还是变坏"**。
+    只跑出个数字不和历史比，等于没有评估。
+    """
+    try:
+        with open(baseline_path, "r", encoding="utf-8") as f:
+            baseline = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[跳过对比] 读不到基线 {baseline_path}：{e}")
+        return 0
+
+    base_sum = baseline.get("summary", {})
+    base_results = {r["id"]: r["passed"] for r in baseline.get("results", [])}
+    cur_results = {r["id"]: r["passed"] for r in results}
+
+    print("=" * 62)
+    print("  与基线对比")
+    print("=" * 62)
+    b_score = base_sum.get("score", 0.0)
+    c_score = summary["score"]
+    delta = c_score - b_score
+    arrow = "↑" if delta > 0 else ("↓" if delta < 0 else "→")
+    print(f"  基线得分 {b_score:.1%}  {arrow}  本次 {c_score:.1%}"
+          f"   （{delta:+.1%}）")
+    base_at = baseline.get("generated_at", "?")
+    print(f"  基线时间 {base_at}")
+    print()
+
+    # 分类对比
+    base_cats = base_sum.get("by_category", {})
+    print(f"  {'分类':<14}{'基线':<12}{'本次':<12}{'变化'}")
+    print(f"  {'-' * 46}")
+    for cat, c in summary["by_category"].items():
+        b = base_cats.get(cat)
+        if not b:
+            print(f"  {cat:<14}{'—':<12}{c['rate']:.1%}{'':<6}(基线无此分类)")
+            continue
+        d = c["rate"] - b["rate"]
+        mark = "↑" if d > 0.001 else ("↓" if d < -0.001 else "→")
+        print(f"  {cat:<14}{b['rate']:.1%}{'':<7}{c['rate']:.1%}{'':<7}{mark} {d:+.1%}")
+
+    # 逐条对比 —— 找出"本来过、现在不过"的回归，这是最需要立刻知道的事
+    regressed = [i for i, ok in cur_results.items() if not ok and base_results.get(i) is True]
+    fixed = [i for i, ok in cur_results.items() if ok and base_results.get(i) is False]
+    new_cases = [i for i in cur_results if i not in base_results]
+    gone_cases = [i for i in base_results if i not in cur_results]
+
+    print()
+    if regressed:
+        print(f"  [REGRESSION] 回归（基线过、本次不过）{len(regressed)} 条：")
+        for i in regressed:
+            print(f"     - {i}")
+    if fixed:
+        print(f"  [FIXED] 修复（基线不过、本次过）{len(fixed)} 条：")
+        for i in fixed:
+            print(f"     - {i}")
+    if new_cases:
+        print(f"  [NEW] 新增用例 {len(new_cases)} 条：{', '.join(new_cases)}")
+    if gone_cases:
+        print(f"  [GONE] 基线有但本次没跑 {len(gone_cases)} 条：{', '.join(gone_cases)}")
+    if not any([regressed, fixed, new_cases, gone_cases]):
+        print("  逐条结果与基线完全一致")
+
+    print()
+    return len(regressed)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="在评估集上跑分")
     parser.add_argument("--dry-run", action="store_true",
@@ -173,6 +242,9 @@ def main() -> int:
     parser.add_argument("--verbose", "-v", action="store_true", help="打印未通过用例的详情")
     parser.add_argument("--limit", type=int, help="最多跑几条（调试用）")
     parser.add_argument("--dataset", type=Path, default=DATASET)
+    parser.add_argument("--baseline", type=Path, default=RESULTS_DIR / "baseline.json",
+                        help="对比用的基线文件（默认 eval/results/baseline.json）")
+    parser.add_argument("--no-compare", action="store_true", help="跳过与基线的对比")
     args = parser.parse_args()
 
     cases = load_dataset(args.dataset)
@@ -255,10 +327,22 @@ def main() -> int:
             "results": results,
         }, f, ensure_ascii=False, indent=2)
     print(f"结果已保存：{out_path}")
+
+    # 与基线对比 —— 这才是评估体系存在的意义
+    regressions = 0
+    if not args.no_compare:
+        if args.baseline.exists():
+            print()
+            regressions = compare_with_baseline(summary, results, args.baseline)
+        else:
+            print()
+            print("提示：还没有基线。建议把本次结果定为基线，之后每次改动都能对比：")
+            print(f"      copy {out_path.name} baseline.json")
+
     print()
-    if not (RESULTS_DIR / "baseline.json").exists():
-        print("提示：这是第一次评估。建议把本次结果定为基线：")
-        print(f"      copy {out_path.name} baseline.json")
+    if regressions:
+        print(f"⚠️ 有 {regressions} 条相对基线发生回归 —— 请检查上面的红色列表。")
+        return 3
     return 0 if summary["failed"] == 0 else 2
 
 

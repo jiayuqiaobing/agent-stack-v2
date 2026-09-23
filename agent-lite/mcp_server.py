@@ -71,5 +71,5 @@ def _format_day(d: dict) -> str:
 # ============================================================================
 
 if __name__ == "__main__":
-    print("🚀 agent-lite MCP Server 启动（stdio 模式）")
+    print("[START] agent-lite MCP Server 启动（stdio 模式）")
     mcp.run(transport="stdio")
