@@ -1,70 +1,177 @@
 # agent-stack v2
 
-> 手写 AI Agent 的**可观测 / 可评估 / 可路由**版本。
-> v1 见 [agent-stack](https://github.com/jiayuqiaobing/agent-stack)（同作者，功能版）。
+> **v1 证明"能跑通"，v2 证明"能运营"。**
+>
+> 一个 AI 系统上线后，你怎么知道它**好不好**、**贵不贵**、**坏了怎么办**？
+> 这个项目用 **可观测 / 可评估 / 可路由** 三件事来回答。
+
+不依赖 LangChain 的手写 Agent 服务：**链路追踪 + 评估体系 + 多上游容错**。
+
+> v1 见 [agent-stack](https://github.com/jiayuqiaobing/agent-stack)（功能版，作者同）。
+> v2 是重写，不是迭代 —— v1 保留作对照。
 
 ---
 
-## 这是什么
+## 为什么重写
 
-一个不依赖 LangChain 的手写 Agent 服务，在 v1 已有能力（agent 循环 + 混合记忆 + RAG + MCP + SSE + Docker）之上，
-补齐工程成熟度：**链路追踪、评估体系、多上游路由**。
+v1 已经把功能跑通了：手写 agent 循环、混合记忆、RAG、MCP 工具、SSE 流式、Docker。
 
-**v2 不是 v1 的延续，是重写。** v1 保留作为对照。
+但它只是**能跑**。上线之后真正的问题一个都没回答：
+
+| 问题 | v1 | v2 |
+|------|----|----|
+| 这次请求慢在哪？ | 只有一行 token 汇总 | 端到端 trace，逐层 span |
+| 改动之后是变好还是变坏？ | 说不清 | 40 条评估集 + 基线对比 |
+| 上游挂了怎么办？ | 整个服务不可用 | 多上游路由 + 自动切换 |
 
 ---
 
 ## 架构
 
 ```
-                  ┌──────────────────────────────┐
-   HTTP :3000 ───▶│  go-gateway (Go)             │
-                  │  路由 · 限流 · trace 注入     │
-                  │  多上游 failover (阶段三)     │
-                  └──────────────┬───────────────┘
-                                 │ X-Trace-Id
-                  ┌──────────────▼───────────────┐
-   HTTP :8000 ───▶│  agent-lite (Python/FastAPI) │
-                  │  手写 agent loop · SSE        │
-                  │  HybridMemory ├─ ChromaDB RAG │
-                  │               └─ 本地 bge 模型│
-                  └──────────────┬───────────────┘
-                                 │ span JSONL
-                  ┌──────────────▼───────────────┐
-                  │  logs/spans-*.jsonl          │
-                  │  → GET /metrics 聚合          │
-                  │  → eval/ 评估集消费           │
-                  └──────────────────────────────┘
+                  ┌──────────────────────────────────┐
+   HTTP :3000 ───▶│  go-gateway  (Go / Gin)          │
+                  │  反向代理 · 限流 · 日志           │
+                  │  [阶段三] 多上游路由 + failover   │
+                  └───────────────┬──────────────────┘
+                                  │  X-Trace-Id
+                  ┌───────────────▼──────────────────┐
+   HTTP :8000 ───▶│  agent-lite  (Python / FastAPI)  │
+                  │  ┌────────────────────────────┐  │
+                  │  │ 手写 agent loop（无框架）   │  │
+                  │  │   ├─ llm.chat span         │  │
+                  │  │   ├─ tool.*   span         │  │
+                  │  │   └─ rag.search span       │  │
+                  │  └────────────────────────────┘  │
+                  │  HybridMemory                    │
+                  │   ├─ 短期：messages              │
+                  │   └─ 长期：ChromaDB + 本地 bge   │
+                  │  MCP 工具（本地 stdio + 远程 SSE）│
+                  └───────────────┬──────────────────┘
+                                  │  span（JSONL 追加写）
+                  ┌───────────────▼──────────────────┐
+                  │  logs/spans-YYYY-MM-DD.jsonl     │
+                  │    ├─▶ GET /metrics   聚合指标    │
+                  │    └─▶ eval/          离线评估    │
+                  └──────────────────────────────────┘
 ```
+
+**为什么用 JSONL 存 span**：零依赖、可 `grep` / `jq` 直接查、追加写所以进程崩溃也不丢已落盘数据。
+没有引入 Prometheus / OpenTelemetry —— 那会给"手写"的项目带来无谓的重依赖。
 
 ---
 
-## 文档（**先读文档再读代码**）
+## 三个能力
 
-| 文档 | 内容 | 给谁看 |
-|------|------|--------|
-| [docs/1-接口冻结.md](docs/1-接口冻结.md) | 不许变的对外契约 | 所有人 |
-| [docs/2-产品规格.md](docs/2-产品规格.md) | 做什么 / 不做什么 / 验收标准 | 所有人 |
-| [docs/3-可观测数据模型.md](docs/3-可观测数据模型.md) | trace/span schema | 开发者 |
-| docs/4-执行规格.md | 分阶段执行说明 | 执行者（AI agent） |
+### 1. 可观测 —— 「好不好、贵不贵」
+
+`GET /metrics?window=24h` 返回聚合指标：
+
+```json
+{
+  "requests": {"total": 120, "error_rate": 0.025},
+  "latency_ms": {"p50": 1200, "p95": 4300, "p99": 8100},
+  "llm": {"calls": 245, "cache_hit_rate": 0.818},
+  "tools": {"calls": 88, "success_rate": 0.943,
+            "by_name": {"calculate": 40, "read_file": 32}},
+  "rag": {"searches": 60, "avg_hit_count": 2.4, "degraded_count": 0},
+  "hints": []
+}
+```
+
+**`cache_hit_rate` 是本项目最关键的一个数字** —— 长会话里大部分 token 是重复发送的上下文，
+命中率直接决定账单。v1 特意把 system prompt 放在上下文最前面（为了缓存前缀命中），
+这个指标就是验证那个设计到底有没有生效。
+
+**`hints` 会自动把异常信号捞出来**，比如：
+
+> `"缓存命中率 31.2% 偏低（<50%）—— v1 的 system prompt 前置设计可能已失效，输入成本会显著上升"`
+
+trace 用 **W3C Trace Context 格式**（32 位 trace_id / 16 位 span_id），
+将来接 OpenTelemetry、Jaeger 不用改。
+
+### 2. 可评估 —— 「改动之后是变好还是变坏」
+
+40 条用例，覆盖五类：工具调用正确性、记忆召回、多轮一致性、错误兜底、基础能力。
+
+```bash
+python -m eval.run --dry-run     # 零成本校验数据集
+python -m eval.run -v            # 真跑并打印未通过详情
+```
+
+跑完自动与基线对比：
+
+```
+  基线得分 75.0%  ↑  本次 80.0%   （+5.0%）
+
+  [REGRESSION] 回归（基线过、本次不过）1 条： tool-calc-04
+  [FIXED]      修复（基线不过、本次过）1 条： memory-05
+```
+
+> **数据集里刻意包含"必须失败"的用例** —— 读不存在的文件、除零、越权读 `/etc/passwd`、
+> 执行 `rm -rf /`。一个只会说"好的"的 agent 在这套题上拿不到高分。这是设计意图。
+
+### 3. 可路由 —— 「坏了怎么办」（阶段三）
+
+Go 网关当前是反向代理 + 限流；阶段三会做成真实网关：多上游路由、**429/5xx 自动 failover**、
+额度控制、缓存命中统计。
+
+> 这不是纸面需求 —— 开发过程中用的中转站**真实发生过间歇性断流**，
+> 这就是为什么它排在路线图里。
 
 ---
 
 ## 快速开始
 
-> **当前状态：骨架阶段，业务代码尚未写入。**
-
 ```bash
-# 1. 配置
+# 1. 配置（注意：只有一个 .env，两个服务共用）
 cp .env.example .env
-# 编辑 .env，至少填 OPENAI_API_KEY 和 API_KEY
+# 至少填 OPENAI_API_KEY；设 API_KEY 可开启鉴权
 
-# 2. 安装依赖
-pip install -r agent-lite/requirements.txt
+# 2. 依赖
+D:\Miniconda3\envs\my-agent-env\python.exe -m pip install -r agent-lite/requirements.txt
 
-# 3. 跑测试（回归安全网）
+# 3. 跑测试
 cd agent-lite && pytest tests/ --ignore=tests/test_eval.py -v
+
+# 4. 起服务
+python main.py            # → http://localhost:8000
 ```
+
+**Docker 一键部署：**
+```bash
+docker compose up -d --build
+curl localhost:3000/health     # 期望 {"gateway":"healthy","agent":"connected"}
+```
+
+---
+
+## 目录
+
+| 路径 | 说明 |
+|------|------|
+| `agent-lite/` | Python Agent 服务 |
+| `agent-lite/observability/` | trace/span 数据模型与指标聚合 |
+| `agent-lite/verify/` | **独立验证脚本** —— 不碰 `tests/`，每个能力一份 |
+| `agent-lite/tests/` | 回归测试（从 v1 迁移，重写过程的安全网） |
+| `go-gateway/` | Go 网关 |
+| `eval/` | 评估集与跑分脚本 |
+| `docs/` | 规格与契约 |
+| `LESSONS.md` | 踩坑库 —— **每个任务开工前必读** |
+
+---
+
+## 文档
+
+| 文档 | 内容 |
+|------|------|
+| [docs/1-接口冻结.md](docs/1-接口冻结.md) | 哪些对外契约不许变 |
+| [docs/2-产品规格.md](docs/2-产品规格.md) | 做什么、**不做什么**、验收标准 |
+| [docs/3-可观测数据模型.md](docs/3-可观测数据模型.md) | trace/span 数据契约 |
+| [docs/4-执行规格.md](docs/4-执行规格.md) | 分阶段执行说明 |
+| [docs/5-工作协议.md](docs/5-工作协议.md) | 工作方式（含铁律与失败处理） |
+| [LESSONS.md](LESSONS.md) | 踩过的坑 |
+| [QUESTIONS.md](QUESTIONS.md) | 待决问题 |
 
 ---
 
@@ -72,19 +179,27 @@ cd agent-lite && pytest tests/ --ignore=tests/test_eval.py -v
 
 | 规则 | 说明 |
 |------|------|
-| 🔒 **接口冻结** | 改对外契约前先读 `docs/1-接口冻结.md`，变更必须在其中登记 |
-| 🧪 **测试是安全网** | `agent-lite/tests/` 下的测试**不得为了让功能通过而修改** |
+| 🔒 **接口冻结** | 改对外契约前先读 `docs/1-接口冻结.md` 并登记变更 |
+| 🧪 **测试是安全网** | `agent-lite/tests/` 不得为了让功能通过而修改 |
 | 🚫 **禁止改测试凑绿** | 测试失败只能改实现，不能改断言、不能 skip |
-| 📝 **P1 不自主决策** | 规格里标 P1 的事项必须由人决定做不做 |
-| 🛑 **阶段间停机** | 每阶段完成即停，等人确认 |
+| 📏 **验收即命令** | 每条需求配一条可执行的验收命令，不写"实现了 XX" |
+| 🌙 **可观测是旁路** | 任何埋点不得改变业务逻辑的行为与结果 |
+
+---
+
+## 已知限制
+
+- **评估判定基于文本匹配**，不是语义判断（见 `eval/README.md`）
+- **暂不检查工具调用本身**，目前从最终回复推断
+- **多 Agent 编排未做** —— 它天然要并行，而并行会打爆额度；
+  等网关的限流与路由做完再考虑受控实现
+- **Docker 端到端冒烟未验证** —— 见 `QUESTIONS.md`
 
 ---
 
 ## 当前进度
 
-- [x] 接口盘点（基线 `b9cd2cc`）
-- [x] 规格文档 1–3
-- [ ] 仓库骨架 ← **在这里**
-- [ ] 阶段一：还债 + 埋点地基
-- [ ] 阶段二：可观测 + 评估体系
-- [ ] 阶段三：Go 网关重做
+- [x] 阶段一：还债 + 埋点地基（5 个 P0 全部验证通过）
+- [x] 阶段二：可观测 + 评估体系（埋点 / `/metrics` / 40 条评估集 / 基线对比）
+- [ ] 阶段三：Go 网关重做（多上游 failover）
+- [ ] P1：受控两级子代理
