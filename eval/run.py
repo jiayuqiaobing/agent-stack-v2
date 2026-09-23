@@ -327,8 +327,31 @@ def main() -> int:
     print(f"开始评估 {len(cases)} 条用例……")
     print()
 
+    # 增量落盘 —— 每跑完一条就写一次
+    #
+    # 为什么：曾有一次跑到 20/40 时进程被管道写死（SIGPIPE），
+    # 而结果只在全部跑完后才写 → **整轮白跑**。
+    # 现在即使中途挂掉，已完成的部分也在文件里。
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    partial_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    partial_path = RESULTS_DIR / f"run-{partial_stamp}.json"
+
+    def _flush(results_so_far: list[dict], done: bool) -> None:
+        payload = {
+            "generated_at": datetime.now().isoformat(),
+            "dataset": str(args.dataset),
+            "complete": done,
+            "progress": f"{len(results_so_far)}/{len(cases)}",
+            "summary": summarize(results_so_far),
+            "results": results_so_far,
+        }
+        tmp = partial_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(partial_path)   # 原子替换，避免读到写了一半的文件
+
     async def _all():
         out = []
+        _flush(out, done=False)
         for i, case in enumerate(cases, 1):
             try:
                 out.append(await run_case(case))
@@ -339,7 +362,9 @@ def main() -> int:
                     "final_reply": f"(执行异常：{type(e).__name__}: {e})",
                 })
             mark = "OK  " if out[-1]["passed"] else "FAIL"
-            print(f"  [{i:>2}/{len(cases)}] [{mark}] {case['id']}")
+            print(f"  [{i:>2}/{len(cases)}] [{mark}] {case['id']}", flush=True)
+            _flush(out, done=False)     # ← 每条都落盘
+        _flush(out, done=True)
         return out
 
     results = asyncio.run(_all())
@@ -347,18 +372,11 @@ def main() -> int:
     print()
     print_report(summary, results, args.verbose)
 
-    # 落盘结果 —— 有了历史才能比较"改动之后是变好还是变坏"
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out_path = RESULTS_DIR / f"run-{stamp}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "generated_at": datetime.now().isoformat(),
-            "dataset": str(args.dataset),
-            "summary": summary,
-            "results": results,
-        }, f, ensure_ascii=False, indent=2)
-    print(f"结果已保存：{out_path}")
+    # 结果已经在跑的过程中增量落盘了（见 _flush），这里只是报个路径
+    print()
+    print(f"结果已保存：{partial_path}")
+    if summary["failed"]:
+        print(f"（{len(cases)} 条用例中 {summary['failed']} 条未通过）")
 
     # 与基线对比 —— 这才是评估体系存在的意义
     regressions = 0
@@ -369,7 +387,7 @@ def main() -> int:
         else:
             print()
             print("提示：还没有基线。建议把本次结果定为基线，之后每次改动都能对比：")
-            print(f"      copy {out_path.name} baseline.json")
+            print(f"      copy {partial_path.name} baseline.json")
 
     print()
     if regressions:
