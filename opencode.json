@@ -2,6 +2,7 @@
   "$schema": "https://opencode.ai/config.json",
 
   "model": "cheapai/grok-4.7",
+  "small_model": "cheapai/deepseek-v4-flash-0731",
 
   "provider": {
     "cheapai": {
@@ -21,7 +22,7 @@
           "limit": { "context": 500000, "output": 64000 }
         },
         "deepseek-v4-flash-0731": {
-          "name": "DeepSeek V4 Flash (cheapai · 国产模型分组)",
+          "name": "DeepSeek V4 Flash (cheapai)",
           "limit": { "context": 128000, "output": 32000 }
         }
       }

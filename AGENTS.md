@@ -1,112 +1,118 @@
-# agent-stack v2 · 执行守则
+# agent-stack v2
 
-> 本文件是 opencode 的项目级指令，每次启动自动注入。
-> **开工前请按顺序读 `docs/` 下的规格文档**（opencode 不会自动解析文件引用，需显式读取）。
+手写 AI Agent 服务（重写版）。目标：证明作者能独立写出这样一个东西。
+**v1 在 `../agent-stack`（分支 `add-dockerfiles`），只作对照，不要修改。**
 
----
-
-## 项目性质
-
-这是 **agent-stack 的重写版（v2）**：手写 AI Agent 服务，在 v1 已有能力（agent 循环 + 混合记忆 + RAG + MCP + SSE + Docker）之上，
-补齐**可观测 / 可评估 / 可路由**三层工程成熟度。
-
-**v1 在 `../agent-stack`，只作对照，不要修改它。**（v1 当前在 `add-dockerfiles` 分支，那是它们的全部资产所在）
+**详细规则见 `docs/5-工作协议.md`；踩坑见 `LESSONS.md`（每个任务开工前必读）。**
 
 ---
 
-## 必读文档（按顺序）
+## 六条铁律（违反即停）
 
-| 顺序 | 文件 | 作用 |
-|------|------|------|
-| 1 | `docs/1-接口冻结.md` | 哪些对外契约**不许变** |
-| 2 | `docs/2-产品规格.md` | 做什么、**不做什么**、验收标准 |
-| 3 | `docs/3-可观测数据模型.md` | trace/span 数据契约 |
-| 4 | `docs/4-执行规格.md` | 当前阶段的具体任务与命令 |
-
----
-
-## 🚫 硬性禁止（违反即视为任务失败）
-
-| 禁止项 | 原因 |
-|--------|------|
-| **修改 `agent-lite/tests/` 下任何文件** | 测试是重写过程的回归安全网。失败只能改实现，**不能改断言、不能 skip**。（唯一例外：任务名明确写了「编写测试」） |
-| **读取或修改 `.env`** | 真实密钥所在。需要环境变量时只看 `.env.example` |
-| **执行 `git push`** | 可以 `git add` / `git commit`（本地），**推送由人来做** |
-| **修改 `docs/` 下任何文档** | 契约由人维护 |
-| **回退、删除或修改 `../agent-stack`（v1）** | 它是对照物，不是工作区 |
-| **自行决定做 P1 项** | 规格里标 P1 的必须由人决定做不做 |
+| # | 铁律 | 怎么判断 |
+|---|------|----------|
+| 1 | 禁止修改 `agent-lite/tests/` | `git diff --stat` 不得出现该目录 |
+| 2 | 禁止谎报结果 | 必须贴**真实命令输出**，不许写"测试通过"了事 |
+| 3 | 禁止回避失败 | 失败只能改实现；不得 skip / xfail / 改断言 |
+| 4 | 禁止读 `.env` | 需要环境变量时看 `.env.example` |
+| 5 | 禁止 `git push` | 只能本地 `git commit` |
+| 6 | 禁止自行决定 P1 项 | 只做当前阶段 P0 清单里的 |
 
 ---
 
-## ✅ 必须遵守
+## 每个任务的固定节奏
 
-- **接口变更前先查 `docs/1-接口冻结.md`**；变更必须在该文档登记
-- **做完必须运行验证命令**，并**贴出真实输出** —— 不允许只描述"已完成"
-- **遇到需要架构决策的问题 → 停下来报告**，不要自行决定
-- **只做当前阶段 P0 清单里的事**，不要顺手做别的
-- **每完成一个任务即停**，等人确认后再继续（阶段间 checkpoint 策略）
-
-### ⚠️ 怎么"问人"（重要）
-
-**你无法向人提问** —— 本环境把 `question` 权限设为 `deny`，交互式提问会被直接拒绝。
-所以需要人决策时，**不要试图提问，也不要自己硬做决定**，改为写入文件：
-
-**新建或追加到 `QUESTIONS.md`（项目根目录）**，格式：
-
-```markdown
-## [任务编号] 一句话说明卡在哪
-- **背景**：为什么会遇到这个问题
-- **选项 A**：<具体做法> —— 优点 / 缺点
-- **选项 B**：<具体做法> —— 优点 / 缺点
-- **我的倾向**：<哪个，为什么>（仅供参考，不构成决定）
-- **阻塞程度**：完全阻塞（干不下去） / 可绕过（先做别的）
+```
+0. 读 LESSONS.md
+1. 先写独立验证脚本（放 agent-lite/verify/，不要碰 tests/）
+2. 写实现
+3. 跑验证脚本 → 必须通过
+4. 跑回归测试 → 必须仍全绿
+5. 自查（见下）
+6. git commit  ← 存档点
+7. 按「汇报格式」报告
 ```
 
-写完后：
-1. **在该任务上停下**，不要继续往下做
-2. 如果问题是"可绕过"的，跳过它继续做**不依赖它**的其他任务
-3. 在最终汇报里**显著提示** `QUESTIONS.md` 有待决项
+**先测试后实现**：没验证脚本就下手 = 边写边猜，猜错要重写 —— **返工最烧钱**。
 
-> 人会在方便时读 `QUESTIONS.md` 并给出答复。你下次启动时会看到答复。
-> **阶段二开工前，先检查 `QUESTIONS.md` 是否有未答复项。**
+**自查清单**：硬编码模型名/路径/key？接口变更登记了吗？有 `except: pass` 吞异常吗（v1 因此 RAG 静默失效）？新依赖进 `requirements.txt` 了吗？留了调试 `print` 吗？
 
 ---
 
-## 常用命令
+## 上游断线怎么办（实测发生过）
 
-```bash
-# 跑测试（test_eval.py 会真调 LLM，不纳入常规回归）
-cd agent-lite && pytest tests/ --ignore=tests/test_eval.py -v
+报错 `模型服务暂时不可用，请稍后重试`：
 
-# 手动起服务
-cd agent-lite && python main.py
+1. 等 **10 秒**，原样重试
+2. 仍失败 → 等 **30 秒**，再试
+3. 仍失败 → 换 `cheapai/grok-4.6`
+4. 仍失败 → 写 `QUESTIONS.md` 后停下
+
+❌ 不许快速连试、不许默默跳过、不许假装无事发生。
+
+---
+
+## 怎么"问人"（你无法交互式提问）
+
+本环境 `question` 权限被 deny —— 问了会被拒。需要人决策时，**追加到 `QUESTIONS.md`**：
+
+```markdown
+## [任务号] 一句话说明卡在哪
+- 背景 / 选项 A（优缺点）/ 选项 B（优缺点）/ 我的倾向 / 阻塞程度(完全阻塞|可绕过)
+```
+
+**可绕过** → 跳过它先做别的；**完全阻塞** → 停下等人。
+
+> 写进 `QUESTIONS.md` 不是回避，是承认信息不够。**假装解决才是回避。**
+
+---
+
+## 命令
+
+```powershell
+# 回归测试（test_eval 真调 LLM，不纳入常规回归）
+cd agent-lite; pytest tests/ --ignore=tests/test_eval.py -v
+
+# 起服务
+cd agent-lite; python main.py
+
+# 读 v1 文件（不要切那个 repo 的分支）
+git -C D:/Python/janyu2cs_projects/agent-stack show add-dockerfiles:agent-lite/<文件>
 ```
 
 **Python 解释器**：`D:\Miniconda3\envs\test-env\python.exe`
-> ⚠️ 用 `my-agent-env` 会报 `ModuleNotFoundError: chromadb`，依赖不全。
+> ⚠️ `my-agent-env` 依赖不全（会报 `ModuleNotFoundError: chromadb`）。**装包也要装进 test-env。**
 
 ---
 
-## 项目特定的坑（v1 踩过，v2 别再踩）
+## 项目特定的坑
 
 | 坑 | 应对 |
 |----|------|
-| **DeepSeek 不支持 embedding**（`text-embedding-3-small` 返 404） | RAG 必须用本地模型 `BAAI/bge-small-zh-v1.5`（fastembed） |
-| 国内下 HF 模型超时 | `HF_ENDPOINT=https://hf-mirror.com` + `HF_HUB_DISABLE_XET=1` + `HF_XET_DISABLE=1`，**必须在 `import fastembed` 之前设置**（`huggingface_hub` 在 import 时就读取） |
-| Windows GBK 控制台打不了 emoji | 脚本输出用 `[OK]` / `[FAIL]`，不要用 ✅❌ |
-| ChromaDB 多会话串味 | 写入时打 `metadatas=[{"session_id": ...}]`，查询用 `where` 过滤 |
-| 模型名写错 | 必须是 `provider/model` 格式；DeepSeek 可用 `deepseek-v4-pro` / `deepseek-flash`，**没有 `deepseek-chat`** |
+| DeepSeek 不支持 embedding | RAG 用本地 `BAAI/bge-small-zh-v1.5`（fastembed） |
+| 下载 HF 模型 401 | `HF_ENDPOINT=hf-mirror` + `HF_HUB_DISABLE_XET=1` + `HF_XET_DISABLE=1`，**必须在 `import fastembed` 之前设** |
+| `except: pass` 吞异常 | v1 的 RAG 因此**静默失效**。异常必须如实抛出或记日志 |
+| Windows GBK 控制台 | 脚本输出用 `[OK]`/`[FAIL]`，**不要用 emoji** |
+| ChromaDB 串味 | 写入打 `metadatas=[{"session_id": ...}]`，查询用 `where` 过滤 |
+| 模型名写错 | 必须 `provider/model` 格式：`cheapai/grok-4.7`、`cheapai/grok-4.6` |
+| **假流式** | 攒完再一次性吐 = 假流式。**v2 要求真流式**（首字时间必须显著小于总耗时） |
 
 ---
 
-## 汇报格式
+## 前端要求
 
-每个任务完成后，按这个格式汇报：
+图形界面（不能是纯终端文本输出）；**必须真流式**；界面能看到 trace / 工具调用过程；干净克制、暗色系。
+
+---
+
+## 汇报格式（缺项视为未完成）
 
 ```
 任务：<编号与名称>
 改动文件：<列表>
 验证命令：<原样命令>
 真实输出：<粘贴，不要概括>
+回归测试：<真实输出>
+LESSONS.md 新增：<有无，第几条>
 遗留问题：<有就写，没有写"无">
 ```
