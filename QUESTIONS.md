@@ -25,9 +25,9 @@
 
 <!-- 执行者在此下方追加。人答复后，把「## 待决」下已解决的部分移到「## 已解决的」 -->
 
-## [阶段一验收 ③] Docker 冒烟测试被阻塞：daemon 未启动
+## [已解决 2026-09-23] ~~Docker 冒烟测试被阻塞：daemon 未启动~~
 
-- **背景**：阶段一验收要求 `docker compose up -d && curl localhost:3000/health`
+- **背景**：阶段一验收要求 `docker compose up -d && curl localhost:3100/health`
   返回 `agent: connected`。但执行时 Docker daemon 不可用：
   ```
   failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine;
@@ -60,4 +60,15 @@
 
 ## 已解决的
 
-_（暂无）_
+### [阶段一验收 ③] Docker 端到端冒烟 —— ✅ 已通过（2026-09-23）
+
+启动 Docker Desktop 后完成验收：
+```
+curl localhost:3100/health
+→ {"agent":"connected","agent_url":"http://agent-lite:8000","gateway":"healthy"}
+```
+`agent_url` 证明容器内服务名解析成功 —— 这正是 v1 写死 `localhost` 时做不到的。
+
+过程中额外解决：
+- 容器名/端口与 v1 项目冲突 → v2 改用 `agent-lite-v2` / `go-gateway-v2`，端口 8100/3100，两边并存
+- Docker Desktop 配的镜像加速器返回 403 → Dockerfile 改用可用的国内源

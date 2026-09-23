@@ -30,13 +30,13 @@ v1 已经把功能跑通了：手写 agent 循环、混合记忆、RAG、MCP 工
 
 ```
                   ┌──────────────────────────────────┐
-   HTTP :3000 ───▶│  go-gateway  (Go / Gin)          │
+   HTTP :3100 ───▶│  go-gateway  (Go / Gin)          │
                   │  反向代理 · 限流 · 日志           │
-                  │  [阶段三] 多上游路由 + failover   │
+                  │  多上游路由 + failover           │
                   └───────────────┬──────────────────┘
                                   │  X-Trace-Id
                   ┌───────────────▼──────────────────┐
-   HTTP :8000 ───▶│  agent-lite  (Python / FastAPI)  │
+   HTTP :8100 ───▶│  agent-lite  (Python / FastAPI)  │
                   │  ┌────────────────────────────┐  │
                   │  │ 手写 agent loop（无框架）   │  │
                   │  │   ├─ llm.chat span         │  │
@@ -113,8 +113,14 @@ python -m eval.run -v            # 真跑并打印未通过详情
 
 ### 3. 可路由 —— 「坏了怎么办」（阶段三）
 
-Go 网关当前是反向代理 + 限流；阶段三会做成真实网关：多上游路由、**429/5xx 自动 failover**、
-额度控制、缓存命中统计。
+Go 网关支持**多上游路由 + 429/5xx 自动 failover**：
+
+```bash
+go test ./go-gateway/proxy/ -v     # 10 个测试覆盖 failover 各路径
+```
+
+上游列表写在 `go-gateway/upstreams.json`，按 `priority` 顺序尝试；
+主上游返回 429/5xx 或连接被拒时**自动切到下一个，调用方无感**。
 
 > 这不是纸面需求 —— 开发过程中用的中转站**真实发生过间歇性断流**，
 > 这就是为什么它排在路线图里。
@@ -135,13 +141,13 @@ D:\Miniconda3\envs\my-agent-env\python.exe -m pip install -r agent-lite/requirem
 cd agent-lite && pytest tests/ --ignore=tests/test_eval.py -v
 
 # 4. 起服务
-python main.py            # → http://localhost:8000
+python main.py            # → http://localhost:8100
 ```
 
 **Docker 一键部署：**
 ```bash
 docker compose up -d --build
-curl localhost:3000/health     # 期望 {"gateway":"healthy","agent":"connected"}
+curl localhost:3100/health     # 期望 {"gateway":"healthy","agent":"connected"}
 ```
 
 ---
@@ -193,7 +199,7 @@ curl localhost:3000/health     # 期望 {"gateway":"healthy","agent":"connected"
 - **暂不检查工具调用本身**，目前从最终回复推断
 - **多 Agent 编排未做** —— 它天然要并行，而并行会打爆额度；
   等网关的限流与路由做完再考虑受控实现
-- **Docker 端到端冒烟未验证** —— 见 `QUESTIONS.md`
+- **额度控制与缓存统计未做** —— 阶段三只做了 failover（见 `docs/2-产品规格.md` 第 7 节）
 
 ---
 
@@ -201,5 +207,5 @@ curl localhost:3000/health     # 期望 {"gateway":"healthy","agent":"connected"
 
 - [x] 阶段一：还债 + 埋点地基（5 个 P0 全部验证通过）
 - [x] 阶段二：可观测 + 评估体系（埋点 / `/metrics` / 40 条评估集 / 基线对比）
-- [ ] 阶段三：Go 网关重做（多上游 failover）
+- [x] 阶段三：Go 网关多上游 failover（10 个测试覆盖）
 - [ ] P1：受控两级子代理
