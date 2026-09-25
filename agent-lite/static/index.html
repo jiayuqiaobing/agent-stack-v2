@@ -3,212 +3,656 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>agent-lite AI Agent</title>
+<title>对话</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: system-ui, sans-serif; background:#1a1a2e; color:#e0e0e0; height:100vh; display:flex; flex-direction:column; max-width:800px; margin:0 auto; }
-  #messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; }
-  .msg { max-width:85%; padding:12px 16px; border-radius:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
-  .msg.user { align-self:flex-end; background:#0f3460; }
-  .msg.assistant { align-self:flex-start; background:#16213e; }
-  .msg .token-info { display:block; margin-top:8px; padding-top:8px; border-top:1px solid #333; font-size:0.8em; color:#888; }
-  #welcome { padding:20px 24px; background:#16213e; border-radius:12px; font-size:14px; line-height:1.8; color:#aaa; }
-  #welcome strong { color:#e0e0e0; }
-  #welcome code { background:#0f3460; padding:2px 6px; border-radius:4px; color:#e94560; }
-  #welcome a { color:#e94560; }
-  #input-area { display:flex; padding:16px; gap:8px; background:#16213e; border-top:1px solid #333; }
-  #input { flex:1; padding:12px; border-radius:8px; border:none; background:#0f3460; color:#e0e0e0; font-size:15px; resize:none; }
-  #input:focus { outline:2px solid #e94560; }
-  #send { padding:12px 24px; border:none; border-radius:8px; background:#e94560; color:#fff; font-size:15px; cursor:pointer; }
-  #send:disabled { opacity:0.5; cursor:not-allowed; }
-  #clear-mem { padding:12px 16px; border:none; border-radius:8px; background:#555; color:#ccc; font-size:13px; cursor:pointer; }
-  #clear-mem:hover { background:#e94560; color:#fff; }
-  .loading::after { content:"..."; animation: dots 1.5s steps(4,end) infinite; }
-  @keyframes dots { 0%,20% { content:""; } 40% { content:"."; } 60% { content:".."; } 80%,100% { content:"..."; } }
-  h1 { text-align:center; padding:16px; font-size:18px; color:#e94560; }
-  #header { display:flex; align-items:center; justify-content:center; gap:16px; }
-  #mode-toggle { display:flex; align-items:center; gap:6px; font-size:13px; color:#aaa; cursor:pointer; user-select:none; }
-  #mode-toggle .switch { width:40px; height:22px; background:#555; border-radius:11px; position:relative; transition:background .3s; }
-  #mode-toggle .switch::after { content:""; width:18px; height:18px; background:#fff; border-radius:50%; position:absolute; top:2px; left:2px; transition:left .3s; }
-  #mode-toggle.stream .switch { background:#e94560; }
-  #mode-toggle.stream .switch::after { left:20px; }
-  #mode-toggle .label-stream, #mode-toggle .label-normal { color:#888; }
-  #mode-toggle.stream .label-stream { color:#e94560; }
-  #mode-toggle:not(.stream) .label-normal { color:#e94560; }
-  #api-key { padding:6px 10px; border-radius:8px; border:none; background:#0f3460; color:#e0e0e0; font-size:12px; width:140px; }
-  #api-key:focus { outline:2px solid #e94560; }
+  :root {
+    --sidebar: #f3f4f6;
+    --ink: #1c1c1f;
+    --muted: #6b6e76;
+    --line: #e4e6eb;
+    --user: #e8eaef;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    background: var(--sidebar);
+    display: flex;
+    font-size: 16px;
+  }
+  #sidebar {
+    width: 300px;
+    flex: 0 0 300px;
+    display: flex;
+    flex-direction: column;
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+  }
+  body.collapsed #sidebar { width: 0; flex-basis: 0; overflow: hidden; border: 0; }
+  .side-head {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    font-size: 18px;
+    font-weight: 650;
+    border-bottom: 1px solid var(--line);
+  }
+  .side-scroll { flex: 1; overflow-y: auto; }
+  .nav-btn, .session-item {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    height: 48px;
+    padding: 0 20px;
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .nav-btn:hover, .session-item:hover, .nav-btn.active, .session-item.active { background: #fff; }
+  .session-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #stage { flex: 1; min-width: 0; background: #fff; display: flex; flex-direction: column; position: relative; }
+  .view { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .view.active { display: flex; }
+  #fold {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  #thread { flex: 1; overflow-y: auto; padding: 72px 8vw 24px; }
+  body.fresh #thread { flex: 0 0 auto; overflow: visible; padding: 0 8vw; }
+  body.fresh #chat-view { justify-content: center; }
+  #empty { max-width: 760px; margin: 0 auto 20px; text-align: center; }
+  #empty h1 { font-size: 32px; font-weight: 600; }
+  .row { max-width: 760px; margin: 0 auto 18px; display: flex; }
+  .row.user { justify-content: flex-end; }
+  .row.assistant { justify-content: flex-start; }
+  .bubble {
+    max-width: 82%;
+    padding: 14px 16px;
+    border-radius: 16px;
+    font-size: 16px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .bubble.user { background: var(--user); }
+  .bubble.assistant { background: #fff; border: 1px solid var(--line); }
+  .reply-text { display: block; }
+  details.tool { margin-top: 10px; color: var(--muted); font-size: 14px; }
+  .usage { margin-top: 10px; color: var(--muted); font-size: 13px; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .actions button {
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .actions button.on { color: var(--ink); border-color: #b9bcc4; background: #f6f7f9; }
+  #composer-wrap { padding: 8px 8vw 28px; }
+  body.fresh #composer-wrap { padding-top: 0; }
+  #composer {
+    max-width: 760px;
+    margin: 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 14px 16px;
+  }
+  #input {
+    width: 100%;
+    border: 0;
+    resize: none;
+    outline: none;
+    font: inherit;
+    font-size: 16px;
+    line-height: 1.6;
+    min-height: 96px;
+    color: var(--ink);
+  }
+  .composer-bar {
+    max-width: 760px;
+    margin: 10px auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #model-link {
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #send {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: #1c1c1f;
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  #send:disabled { opacity: 0.35; }
+  .doc { overflow-y: auto; padding: 88px 32px 48px; }
+  .doc-inner { width: min(640px, 100%); margin: 0 auto; }
+  .doc h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+  .doc .lead { color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
+  .choices { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  .choices button, .text-btn {
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #channel-form {
+    margin-top: 8px;
+    padding: 28px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fafafa;
+  }
+  #channel-form h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .field { margin-top: 16px; }
+  .field label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .field input {
+    width: 100%;
+    height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 16px;
+    background: #fff;
+  }
+  .channel-row {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    padding: 12px 0;
+    font: inherit;
+    cursor: pointer;
+  }
+  .channel-row.active { font-weight: 650; }
+  .form-error { color: #b42318; margin-top: 10px; font-size: 14px; }
+  .err { color: #b42318; }
 </style>
 </head>
-<body>
-<div id="header">
-  <h1>agent-lite AI Agent</h1>
-  <div id="mode-toggle" class="stream" onclick="toggleMode()" title="切换流式/非流式">
-    <span class="label-stream">流式</span>
-    <span class="switch"></span>
-    <span class="label-normal">完整</span>
+<body class="fresh">
+<aside id="sidebar">
+  <div class="side-head">对话</div>
+  <div class="side-scroll">
+    <button class="nav-btn" id="new-chat" type="button">新对话</button>
+    <div id="session-list"></div>
+    <button class="nav-btn" id="channel-btn" type="button">渠道</button>
+    <button class="nav-btn" id="help-btn" type="button">帮助</button>
   </div>
-  <input id="api-key" type="password" placeholder="API Key（可选）" title="服务端启用鉴权时填写，保存在浏览器本地" oninput="saveApiKey(this.value)">
-</div>
-<div id="messages">
-  <div id="welcome">
-    <strong>我是一个 AI 助手，可以用以下工具帮你：</strong><br>
-    · <code>calculate</code> 数学计算（四则运算、幂运算）<br>
-    · <code>read_file</code> 读取项目文件、列出目录<br>
-    · <code>get_time</code> 查询当前日期和时间<br>
-    · <code>get_weather</code> 查询全球城市天气<br>
-    · 远程工具：金融数据查询、网站检测<br><br>
-    <strong>API 端点说明：</strong><br>
-    · <code>POST /chat/stream</code> — SSE 流式对话（本页面使用，逐字输出）<br>
-    · <code>POST /chat</code> — 非流式对话（一次性返回完整回复）<br>
-    · <a href="/docs" target="_blank">/docs</a> — Swagger API 文档 &nbsp;|&nbsp;
-    <a href="/health" target="_blank">/health</a> — 健康检查
+</aside>
+<main id="stage">
+  <button id="fold" type="button" title="收起侧栏">☰</button>
+  <div id="chat-view" class="view active">
+    <div id="thread">
+      <div id="empty"><h1>今天想做什么？</h1></div>
+    </div>
+    <div id="composer-wrap">
+      <div id="composer">
+        <textarea id="input" rows="3" placeholder="问点什么"></textarea>
+      </div>
+      <div class="composer-bar">
+        <button id="model-link" type="button">未选择渠道</button>
+        <button id="send" type="button">↑</button>
+      </div>
+    </div>
   </div>
-</div>
-<div id="input-area">
-  <textarea id="input" rows="2" placeholder="输入消息..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
-  <button id="send" onclick="send()">发送</button>
-  <button id="clear-mem" onclick="clearMemory()" title="清空当前会话记忆">清空</button>
-</div>
-
+  <section id="help-view" class="view doc">
+    <div class="doc-inner">
+      <h1>帮助</h1>
+      <p class="lead">回复在气泡里逐字出现。工具过程默认折起。会话只在当前进程里，重启后不再列出。换模型要到「渠道」里改这一条的接口地址、密钥和模型名，三者一起生效。</p>
+    </div>
+  </section>
+  <section id="channel-view" class="view doc">
+    <div class="doc-inner">
+      <h1>渠道</h1>
+      <p id="auth-banner" class="form-error" hidden>服务开了访问令牌。打开项目根目录的 .env，把 API_KEY= 后面的值填进下面。这不是模型供应商的密钥。</p>
+      <div class="field">
+        <label for="service-key">本服务令牌</label>
+        <input id="service-key" type="password" placeholder="只填 .env 里的 API_KEY" autocomplete="off">
+      </div>
+      <p class="lead">一条渠道保存接口地址、密钥和模型名。中转站选「自定义」，把地址、密钥、模型名填进下面的表。这里的密钥发给模型供应商。</p>
+      <div id="channel-list"></div>
+      <div class="choices">
+        <button type="button" id="pick-custom">自定义</button>
+        <button type="button" id="pick-deepseek">DeepSeek</button>
+        <button type="button" id="pick-openai">OpenAI</button>
+      </div>
+      <form id="channel-form" hidden>
+        <h2>连接信息</h2>
+        <div class="field" id="model-picker">
+          <label for="ch-name">名称</label>
+          <input id="ch-name" type="text" placeholder="例如：我的中转站">
+        </div>
+        <div class="field">
+          <label for="ch-url">接口地址</label>
+          <input id="ch-url" type="text" placeholder="https://example.com/v1">
+        </div>
+        <div class="field">
+          <label for="ch-key">密钥</label>
+          <input id="ch-key" type="password" placeholder="供应商给的 key" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="ch-model">模型名</label>
+          <input id="ch-model" type="text" placeholder="provider/model">
+        </div>
+        <p id="form-error" class="form-error"></p>
+        <div class="choices">
+        <button type="submit">保存并使用</button>
+      </div>
+      </form>
+    </div>
+  </section>
+</main>
 <script>
-const messages = document.getElementById('messages');
-const input = document.getElementById('input');
-const sendBtn = document.getElementById('send');
-const modeToggle = document.getElementById('mode-toggle');
+const thread = document.getElementById("thread");
+const empty = document.getElementById("empty");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const sessionList = document.getElementById("session-list");
+const modelLink = document.getElementById("model-link");
+const channelForm = document.getElementById("channel-form");
+const formError = document.getElementById("form-error");
+const serviceKey = document.getElementById("service-key");
+const authBanner = document.getElementById("auth-banner");
 
-let isStream = true;  // 默认流式
-let sessionId = null;  // 后端分配
+let sessionId = localStorage.getItem("session_id") || null;
+let editingId = null;
+let authRequired = false;
 
-// --- API Key 鉴权（可选）---
-function saveApiKey(v) { localStorage.setItem('api_key', v); }
-function getHeaders() {
-  const key = localStorage.getItem('api_key') || '';
-  const h = { 'Content-Type': 'application/json' };
-  if (key) h['Authorization'] = 'Bearer ' + key;
+serviceKey.value = localStorage.getItem("service_key") || "";
+serviceKey.oninput = () => {
+  localStorage.setItem("service_key", serviceKey.value);
+  paintAuth();
+};
+
+function paintAuth() {
+  const missing = authRequired && !(localStorage.getItem("service_key") || "").trim();
+  authBanner.hidden = !missing;
+}
+
+function explainHttp(status, text) {
+  if (text.includes("缺少 API Key")) {
+    return "服务要求本服务令牌，这次请求没带。到「渠道」页最上面，填写 .env 里 API_KEY= 后面的值。";
+  }
+  if (text.includes("API Key 无效")) {
+    return "本服务令牌和 .env 里的 API_KEY 不一致。这一栏不要填模型供应商的密钥。";
+  }
+  return "请求失败 " + status + " " + text.slice(0, 200);
+}
+
+function headers() {
+  const h = { "Content-Type": "application/json" };
+  const key = localStorage.getItem("service_key") || "";
+  if (key) h["Authorization"] = "Bearer " + key;
   return h;
 }
-// 恢复上次填的 key
-document.getElementById('api-key').value = localStorage.getItem('api_key') || '';
 
-function toggleMode() {
-  isStream = !isStream;
-  modeToggle.classList.toggle('stream', isStream);
+function loadChannels() {
+  try { return JSON.parse(localStorage.getItem("channels") || "[]"); }
+  catch (e) { return []; }
+}
+function saveChannels(list) {
+  localStorage.setItem("channels", JSON.stringify(list));
+}
+function activeChannel() {
+  const id = localStorage.getItem("active_channel") || "";
+  return loadChannels().find((item) => item.id === id) || null;
+}
+function paintChip() {
+  const item = activeChannel();
+  modelLink.textContent = item ? (item.name + " · " + item.model) : "未选择渠道";
 }
 
-function addMsg(role, content) {
-  const div = document.createElement('div');
-  div.className = 'msg ' + role;
-  div.textContent = content;
-  messages.appendChild(div);
-  messages.scrollTop = messages.scrollHeight;
-  return div;
+function renderChannels() {
+  const box = document.getElementById("channel-list");
+  box.innerHTML = "";
+  const active = localStorage.getItem("active_channel") || "";
+  loadChannels().forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "channel-row" + (item.id === active ? " active" : "");
+    btn.textContent = item.name + " · " + item.model;
+    btn.onclick = () => {
+      localStorage.setItem("active_channel", item.id);
+      paintChip();
+      renderChannels();
+    };
+    box.appendChild(btn);
+  });
+}
+
+function openForm(preset) {
+  channelForm.hidden = false;
+  formError.textContent = "";
+  editingId = null;
+  document.getElementById("ch-name").value = "";
+  document.getElementById("ch-key").value = "";
+  if (preset === "deepseek") {
+    document.getElementById("ch-name").value = "DeepSeek";
+    document.getElementById("ch-url").value = "https://api.deepseek.com/v1";
+    document.getElementById("ch-model").value = "deepseek-v4-pro";
+  } else if (preset === "openai") {
+    document.getElementById("ch-name").value = "OpenAI";
+    document.getElementById("ch-url").value = "https://api.openai.com/v1";
+    document.getElementById("ch-model").value = "gpt-4o-mini";
+  } else {
+    document.getElementById("ch-url").value = "";
+    document.getElementById("ch-model").value = "";
+  }
+  document.getElementById("ch-key").focus();
+}
+
+channelForm.onsubmit = (e) => {
+  e.preventDefault();
+  const item = {
+    id: editingId || Date.now().toString(36),
+    name: document.getElementById("ch-name").value.trim() || "未命名",
+    base_url: document.getElementById("ch-url").value.trim(),
+    api_key: document.getElementById("ch-key").value.trim(),
+    model: document.getElementById("ch-model").value.trim(),
+  };
+  if (!item.base_url || !item.api_key || !item.model) {
+    formError.textContent = "接口地址、密钥、模型名都要填。";
+    return;
+  }
+  const list = loadChannels().filter((row) => row.id !== item.id);
+  list.unshift(item);
+  saveChannels(list);
+  localStorage.setItem("active_channel", item.id);
+  channelForm.hidden = true;
+  paintChip();
+  renderChannels();
+  showPage("chat");
+};
+
+function showPage(name) {
+  const page = name === "help" || name === "channel" ? name : "chat";
+  document.getElementById("chat-view").classList.toggle("active", page === "chat");
+  document.getElementById("help-view").classList.toggle("active", page === "help");
+  document.getElementById("channel-view").classList.toggle("active", page === "channel");
+  document.getElementById("help-btn").classList.toggle("active", page === "help");
+  document.getElementById("channel-btn").classList.toggle("active", page === "channel");
+  const onEmptyChat = page === "chat" && empty.style.display !== "none";
+  document.body.classList.toggle("fresh", onEmptyChat);
+  const target = "#" + page;
+  if (location.hash !== target) location.hash = target;
+}
+
+document.getElementById("fold").onclick = () => document.body.classList.toggle("collapsed");
+document.getElementById("new-chat").onclick = () => {
+  sessionId = null;
+  localStorage.removeItem("session_id");
+  thread.innerHTML = "";
+  thread.appendChild(empty);
+  empty.style.display = "";
+  showPage("chat");
+  loadSessions();
+};
+document.getElementById("help-btn").onclick = () => showPage("help");
+document.getElementById("channel-btn").onclick = () => showPage("channel");
+modelLink.onclick = () => showPage("channel");
+document.getElementById("pick-custom").onclick = () => openForm("custom");
+document.getElementById("pick-deepseek").onclick = () => openForm("deepseek");
+document.getElementById("pick-openai").onclick = () => openForm("openai");
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+sendBtn.onclick = () => send();
+window.addEventListener("hashchange", () => showPage(location.hash.slice(1) || "chat"));
+
+function addUser(text) {
+  empty.style.display = "none";
+  document.body.classList.remove("fresh");
+  const row = document.createElement("div");
+  row.className = "row user";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble user";
+  bubble.textContent = text;
+  row.appendChild(bubble);
+  thread.appendChild(row);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function addAssistant() {
+  const row = document.createElement("div");
+  row.className = "row assistant";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble assistant";
+  const replyText = document.createElement("span");
+  replyText.className = "reply-text";
+  const replyNode = document.createTextNode("");
+  replyText.appendChild(replyNode);
+  const tools = document.createElement("div");
+  const usage = document.createElement("div");
+  usage.className = "usage";
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.textContent = "复制";
+  const likeBtn = document.createElement("button");
+  likeBtn.type = "button";
+  likeBtn.textContent = "喜欢";
+  const dislikeBtn = document.createElement("button");
+  dislikeBtn.type = "button";
+  dislikeBtn.textContent = "不喜欢";
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.textContent = "删除";
+  copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(replyNode.data);
+      copyBtn.textContent = "已复制";
+    } catch (e) {
+      copyBtn.textContent = "复制失败";
+    }
+  };
+  likeBtn.onclick = () => {
+    likeBtn.classList.toggle("on");
+    if (likeBtn.classList.contains("on")) dislikeBtn.classList.remove("on");
+  };
+  dislikeBtn.onclick = () => {
+    dislikeBtn.classList.toggle("on");
+    if (dislikeBtn.classList.contains("on")) likeBtn.classList.remove("on");
+  };
+  deleteBtn.onclick = () => row.remove();
+  actions.appendChild(copyBtn);
+  actions.appendChild(likeBtn);
+  actions.appendChild(dislikeBtn);
+  actions.appendChild(deleteBtn);
+  bubble.appendChild(replyText);
+  bubble.appendChild(tools);
+  bubble.appendChild(usage);
+  bubble.appendChild(actions);
+  row.appendChild(bubble);
+  thread.appendChild(row);
+  return { replyText, replyNode, tools, usage };
+}
+
+function appendTool(tools, name) {
+  const box = document.createElement("details");
+  box.className = "tool";
+  const summary = document.createElement("summary");
+  summary.textContent = "已调用 " + name;
+  box.appendChild(summary);
+  tools.appendChild(box);
+}
+
+function renderUsage(node, prompt, completion, approx) {
+  if (prompt == null) {
+    node.textContent = approx ? ("生成中 · 约 " + approx + " 字") : "";
+    return;
+  }
+  node.textContent = "输入 " + prompt + " · 输出 " + completion + " · 合计 " + (prompt + completion);
+}
+
+async function loadSessions() {
+  sessionList.innerHTML = "";
+  try {
+    const resp = await fetch("/sessions", { headers: headers() });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    (data.sessions || []).forEach((item) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "session-item" + (item.id === sessionId ? " active" : "");
+      btn.textContent = item.id;
+      btn.onclick = () => {
+        sessionId = item.id;
+        localStorage.setItem("session_id", item.id);
+        showPage("chat");
+        loadSessions();
+      };
+      sessionList.appendChild(btn);
+    });
+  } catch (e) {}
 }
 
 async function send() {
   const text = input.value.trim();
   if (!text) return;
-  input.value = '';
+  const channel = activeChannel();
+  input.value = "";
   sendBtn.disabled = true;
-
-  addMsg('user', text);
-  const assistantDiv = addMsg('assistant', '');
-  assistantDiv.classList.add('loading');
-
+  addUser(text);
+  const view = addAssistant();
+  if (authRequired && !(localStorage.getItem("service_key") || "").trim()) {
+    view.replyNode.appendData("还没填本服务令牌。到「渠道」页最上面，填写 .env 里 API_KEY= 后面的值。");
+    view.replyText.classList.add("err");
+    showPage("channel");
+    serviceKey.focus();
+    sendBtn.disabled = false;
+    return;
+  }
+  if (!channel) {
+    view.replyNode.appendData("还没有渠道。打开左侧「渠道」，选自定义或预设，填接口地址、密钥和模型名。");
+    sendBtn.disabled = false;
+    return;
+  }
+  let chars = 0;
+  renderUsage(view.usage, null, null, 0);
   try {
-    if (isStream) {
-      await sendStream(text, assistantDiv);
-    } else {
-      await sendNormal(text, assistantDiv);
+    const resp = await fetch("/chat/stream", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        message: text,
+        session_id: sessionId,
+        model: channel.model,
+        api_key: channel.api_key,
+        base_url: channel.base_url,
+      }),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      view.replyNode.appendData(explainHttp(resp.status, errText));
+      view.replyText.classList.add("err");
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        let event;
+        try { event = JSON.parse(line.slice(6)); }
+        catch (e) { continue; }
+        if (event.type === "session") {
+          sessionId = event.session_id;
+          localStorage.setItem("session_id", sessionId);
+        } else if (event.type === "delta") {
+          if (typeof event.content === "string" && event.content.startsWith("\n\n---\n")) continue;
+          view.replyNode.appendData(event.content || "");
+          chars += (event.content || "").length;
+          if (!view.usage.dataset.final) renderUsage(view.usage, null, null, chars);
+        } else if (event.type === "tool_call") {
+          appendTool(view.tools, event.name || "工具");
+        } else if (event.type === "usage") {
+          view.usage.dataset.final = "1";
+          renderUsage(view.usage, event.prompt_tokens || 0, event.completion_tokens || 0);
+        } else if (event.type === "done") {
+          if (!view.replyNode.data.trim()) view.replyNode.appendData(event.reply || "（空回复）");
+        } else if (event.type === "error") {
+          view.replyNode.appendData(event.message || "出错");
+          view.replyText.classList.add("err");
+        }
+        thread.scrollTop = thread.scrollHeight;
+      }
+    }
+    if (!view.replyNode.data.trim()) {
+      view.replyNode.appendData("没有收到回复");
+      view.replyText.classList.add("err");
     }
   } catch (e) {
-    assistantDiv.textContent = '请求失败: ' + e.message;
-    assistantDiv.classList.remove('loading');
-  }
-
-  messages.scrollTop = messages.scrollHeight;
-  sendBtn.disabled = false;
-  input.focus();
-}
-
-// --- 流式（SSE）---
-async function sendStream(text, assistantDiv) {
-  const resp = await fetch('/chat/stream', {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ message: text, session_id: sessionId }),
-  });
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      try {
-        const event = JSON.parse(line.slice(6));
-        if (event.type === 'session') {
-          sessionId = event.session_id;
-        } else if (event.type === 'delta') {
-          assistantDiv.classList.remove('loading');
-          if (event.content.startsWith('\n\n---\n')) {
-            const span = document.createElement('span');
-            span.className = 'token-info';
-            span.textContent = event.content.replace(/^[\s\n-]+/, '');
-            assistantDiv.appendChild(span);
-          } else {
-            assistantDiv.textContent += event.content;
-          }
-        } else if (event.type === 'tool_call') {
-          assistantDiv.classList.remove('loading');
-          assistantDiv.textContent += '\n[工具调用: ' + event.name + ']';
-        } else if (event.type === 'done') {
-          if (!assistantDiv.textContent.trim()) {
-            assistantDiv.textContent = event.reply || '(空回复)';
-          }
-          assistantDiv.classList.remove('loading');
-        } else if (event.type === 'error') {
-          assistantDiv.textContent = '错误: ' + event.message;
-          assistantDiv.classList.remove('loading');
-        }
-      } catch (e) { /* 忽略解析错误 */ }
-    }
+    view.replyNode.appendData("请求失败: " + e.message);
+    view.replyText.classList.add("err");
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+    loadSessions();
   }
 }
 
-// --- 非流式（一次性 JSON）---
-async function sendNormal(text, assistantDiv) {
-  const resp = await fetch('/chat', {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ message: text, session_id: sessionId }),
-  });
-
-  const data = await resp.json();
-  assistantDiv.classList.remove('loading');
-
-  if (data.status === 'ok') {
-    if (data.session_id) sessionId = data.session_id;
-    assistantDiv.textContent = data.reply;
-  } else {
-    assistantDiv.textContent = '错误: ' + (data.error || '未知');
+paintChip();
+renderChannels();
+loadSessions();
+if (!["#chat", "#help", "#channel"].includes(location.hash)) location.hash = "chat";
+else showPage(location.hash.slice(1));
+fetch("/health").then((resp) => resp.json()).then((data) => {
+  authRequired = !!data.auth_required;
+  paintAuth();
+  if (authRequired && !(localStorage.getItem("service_key") || "").trim()) {
+    showPage("channel");
+    serviceKey.focus();
   }
-}
-
-async function clearMemory() {
-  if (!sessionId) return;
-  await fetch('/sessions/' + sessionId, { method: 'DELETE', headers: getHeaders() });
-  sessionId = null;  // 下次请求自动分配新 session
-  messages.innerHTML = '';
-  location.reload();
-}
+}).catch(() => {});
 </script>
 </body>
 </html>

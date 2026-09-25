@@ -42,6 +42,7 @@ async def agent_loop(
     tools: list | None = None,
     tool_session_map: dict | None = None,
     model: str = MODEL_NAME,
+    llm=None,
     max_steps: int = 8,
 ) -> str:
     """
@@ -75,7 +76,7 @@ async def agent_loop(
         llm_span = trace.make_span("llm.chat", "llm", session_id=memory.session_id,
                                    attributes={"model": model})
         try:
-            response = await aclient.chat.completions.create(
+            response = await (llm or aclient).chat.completions.create(
                 model=model,
                 messages=context,
                 tools=tools or None,
@@ -171,6 +172,7 @@ async def agent_loop_stream(
     tools: list | None = None,
     tool_session_map: dict | None = None,
     model: str = MODEL_NAME,
+    llm=None,
     max_steps: int = 8,
 ):
     """
@@ -201,7 +203,7 @@ async def agent_loop_stream(
         llm_span = trace.make_span("llm.chat", "llm", session_id=memory.session_id,
                                    attributes={"model": model})
         try:
-            stream = await aclient.chat.completions.create(
+            stream = await (llm or aclient).chat.completions.create(
                 model=model,
                 messages=context,
                 tools=tools or None,
@@ -255,8 +257,13 @@ async def agent_loop_stream(
                             tc["function"]["arguments"] += tc_delta.function.arguments
 
         if stream_usage:
-            total_prompt += stream_usage.prompt_tokens
-            total_completion += stream_usage.completion_tokens
+            total_prompt += stream_usage.prompt_tokens or 0
+            total_completion += stream_usage.completion_tokens or 0
+            yield {
+                "type": "usage",
+                "prompt_tokens": total_prompt,
+                "completion_tokens": total_completion,
+            }
 
         # 流结束 —— 补齐 llm span 的 token 数据
         _details = getattr(stream_usage, "prompt_tokens_details", None) if stream_usage else None

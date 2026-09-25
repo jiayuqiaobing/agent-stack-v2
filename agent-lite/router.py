@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from models import ChatRequest, ChatResponse
 from agent import agent_loop, agent_loop_stream
 from memory import HybridMemory
-from config import client
+from config import client, MODEL_NAME, make_client
 from auth import verify_api_key
 from observability import trace
 
@@ -101,10 +101,24 @@ def _get_or_create_session(
     return new_id, sessions[new_id]
 
 
+def _request_model(model: str | None) -> str:
+    """空字符串视为没选，回落到进程配置。"""
+    if model and model.strip():
+        return model.strip()
+    return MODEL_NAME
+
+
+def _endpoint(body: ChatRequest):
+    """模型、供应商密钥、接口地址绑在同一次请求上。密钥不写进日志。"""
+    model = _request_model(body.model)
+    return model, make_client(body.api_key, body.base_url)
+
+
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_api_key)])
 async def chat(body: ChatRequest, request: Request):
     """非流式对话 — 一次性返回完整回复"""
     sid, memory = _get_or_create_session(body.session_id, request.app.state.all_tools)
+    model, llm = _endpoint(body)
 
     # 根 span —— 一次完整的 agent 往返（见 docs/3-可观测数据模型.md 第 5 节）
     with trace.start_trace("agent.turn", session_id=sid) as root:
@@ -114,6 +128,8 @@ async def chat(body: ChatRequest, request: Request):
                 memory=memory,
                 tools=request.app.state.all_tools,
                 tool_session_map=request.app.state.tool_session_map,
+                model=model,
+                llm=llm,
             )
             trace.finish_span(root, status="ok")
             root["attributes"]["terminated_by"] = "reply"
@@ -133,6 +149,7 @@ async def chat_stream(body: ChatRequest, request: Request):
     """流式对话 — SSE 逐 token 推送"""
 
     sid, memory = _get_or_create_session(body.session_id, request.app.state.all_tools)
+    model, llm = _endpoint(body)
 
     async def event_generator():
         try:
@@ -144,6 +161,8 @@ async def chat_stream(body: ChatRequest, request: Request):
                 memory=memory,
                 tools=request.app.state.all_tools,
                 tool_session_map=request.app.state.tool_session_map,
+                model=model,
+                llm=llm,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:

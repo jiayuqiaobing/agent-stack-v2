@@ -146,6 +146,7 @@ async def health():
     return {
         "status": "healthy",
         "version": "0.1.0",
+        "auth_required": bool(os.getenv("API_KEY", "").strip()),
     }
 
 
