@@ -127,21 +127,47 @@ go test ./go-gateway/proxy/ -v     # 10 个测试覆盖 failover 各路径
 
 ---
 
-## 快速开始
+## 安装
+
+需要 Python 3.11 或更高。密钥只放在你自己的 `.env` 里，不要提交。
 
 ```bash
-# 1. 配置（注意：只有一个 .env，两个服务共用）
+git clone https://github.com/jiayuqiaobing/agent-stack-v2.git
+cd agent-stack-v2
+python -m venv .venv
+```
+
+Windows：
+
+```powershell
+.\.venv\Scripts\python -m pip install -r agent-lite/requirements.txt
+copy .env.example .env
+.\.venv\Scripts\python agent-lite\main.py
+```
+
+macOS / Linux：
+
+```bash
+.venv/bin/python -m pip install -r agent-lite/requirements.txt
 cp .env.example .env
-# 至少填 OPENAI_API_KEY；设 API_KEY 可开启鉴权
+.venv/bin/python agent-lite/main.py
+```
 
-# 2. 依赖
-D:\Miniconda3\envs\my-agent-env\python.exe -m pip install -r agent-lite/requirements.txt
+浏览器打开 http://localhost:8000 。至少在 `.env` 里填写 `OPENAI_API_KEY`。模型名用 `MODEL_NAME`，不要改代码。
 
-# 3. 跑测试
-cd agent-lite && pytest tests/ --ignore=tests/test_eval.py -v
+检查是否起来：
 
-# 4. 起服务
-python main.py            # → http://localhost:8100
+```bash
+curl http://localhost:8000/health
+```
+
+期望包含 `"status": "healthy"` 和 `"version": "0.2.0"`。
+
+回归测试（不调用真实模型）：
+
+```bash
+cd agent-lite
+python -m pytest tests/ --ignore=tests/test_eval.py -q
 ```
 
 **Docker 一键部署：**

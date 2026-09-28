@@ -22,7 +22,7 @@ class HybridMemory:
     ├── 短期记忆 → 数组存、按顺序读
     └── 长期记忆 → ChromaDB 存、语义检索读  ← RAG 就在这
     """
-    def __init__(self,system_prompt,client,session_id="default",summary_trigger=15,keep_recent=6):
+    def __init__(self,system_prompt,client,session_id="default",summary_trigger=20,keep_recent=20):
         """
         system_prompt:系统提示词，在上下文最上层，100%缓存命中，减少token开销
         client: 同步 OpenAI 客户端（仅 search_memory 等非热路径使用）
@@ -38,6 +38,8 @@ class HybridMemory:
 
         self.short_term:list[dict] = []
         self.long_term:list[dict] = []
+        self.pending_questions = None
+        self.reflections: list[str] = []
 
         try:
             self.rag = RAGStore(session_id=session_id)
@@ -74,7 +76,7 @@ class HybridMemory:
         msg:模型返回的message格式
         注: short_term 的一条信息可以有一个队列的工具信息
         """
-        self.short_term.append({
+        stored = {
             "role":"assistant",
             "content":msg.content or "",
             "tool_calls":[
@@ -88,8 +90,62 @@ class HybridMemory:
                 }
                 for tc in msg.tool_calls
             ]
-        })
+        }
+        reasoning = getattr(msg, "reasoning_content", None)
+        if reasoning:
+            stored["reasoning_content"] = reasoning
+        self.short_term.append(stored)
         logger.debug("短期记忆 +1（工具调用）：%d 个 tool_call", len(msg.tool_calls))
+
+    def _safe_messages(self) -> list[dict]:
+        """清理历史中的供应商扩展字段和残缺 tool-call 链。"""
+        safe: list[dict] = []
+        i = 0
+        dropped = 0
+        while i < len(self.short_term):
+            msg = self.short_term[i]
+            role = msg.get("role") if isinstance(msg, dict) else None
+            if role == "assistant" and isinstance(msg.get("tool_calls"), list):
+                calls = [tc for tc in msg["tool_calls"] if isinstance(tc, dict) and tc.get("id")]
+                expected = {tc["id"] for tc in calls}
+                following: list[dict] = []
+                j = i + 1
+                while j < len(self.short_term) and self.short_term[j].get("role") == "tool":
+                    following.append(self.short_term[j])
+                    j += 1
+                actual = {item.get("tool_call_id") for item in following}
+                if expected and expected.issubset(actual):
+                    assistant = {
+                        "role": "assistant",
+                        "content": msg.get("content") or None,
+                        "tool_calls": calls,
+                    }
+                    safe.append(assistant)
+                    for item in following:
+                        if item.get("tool_call_id") in expected:
+                            safe.append({
+                                "role": "tool",
+                                "content": str(item.get("content") or ""),
+                                "tool_call_id": item["tool_call_id"],
+                            })
+                    i = j
+                    continue
+                dropped += 1
+                content = msg.get("content") or ""
+                if content:
+                    safe.append({"role": "assistant", "content": content})
+                i = j
+                continue
+            if role == "tool":
+                dropped += 1
+                i += 1
+                continue
+            if role in {"system", "user", "assistant"}:
+                safe.append({"role": role, "content": msg.get("content") or ""})
+            i += 1
+        if dropped:
+            logger.warning("上下文清理了 %d 条残缺或不兼容的工具消息 session=%s", dropped, self.session_id)
+        return safe
 
     async def build_context(self) -> list:
         """
@@ -113,10 +169,14 @@ class HybridMemory:
            那样每个 query 一变，它后面的整个 short_term 前缀都失效，
            缓存命中率被无谓拉低。改动记录见 verify/cache-before.json 与 cache-after.json。
         """
-        context = [{"role": "system", "content": self.system_prompt}]
+        system = self.system_prompt
+        extra = getattr(self, "extra_system", "") or ""
+        if extra.strip():
+            system = system + "\n\n" + extra.strip()
+        context = [{"role": "system", "content": system}]
 
         #  短期记忆原样追加（只增不改 → 前缀稳定 → 可缓存）
-        context.extend(self.short_term)
+        context.extend(self._safe_messages())
 
         #  拼接用户当前问题（用于 RAG 检索的关键词）
         user_query = ""
@@ -149,6 +209,17 @@ class HybridMemory:
                 and str(context[-1].get("content", "")).startswith("以下是历史相关记忆"):
             rag_block = context.pop()
             context.insert(1, rag_block)
+
+        hint = getattr(self, "phase_hint", "") or ""
+        if hint.strip():
+            context.append({"role": "system", "content": hint.strip()})
+
+        notes = getattr(self, "reflections", None) or []
+        if notes:
+            context.append({
+                "role": "system",
+                "content": "本会话工具失败记录：\n" + "\n".join(f"- {n}" for n in notes[-5:]),
+            })
 
         logger.debug("上下文构建完成，共 %d 条消息", len(context))
         return context

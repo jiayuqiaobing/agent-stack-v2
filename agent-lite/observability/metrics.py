@@ -128,9 +128,16 @@ def build_report(window: str = DEFAULT_WINDOW, spans: Iterable[dict] | None = No
     # ---- LLM ----（缓存命中率是本项目的关键指标：验证前缀缓存设计是否生效）
     llm_spans = [s for s in spans if s.get("kind") == "llm"]
     if llm_spans:
-        prompt_tokens = sum(int(s["attributes"].get("prompt_tokens", 0)) for s in llm_spans)
-        completion_tokens = sum(int(s["attributes"].get("completion_tokens", 0)) for s in llm_spans)
-        cache_tokens = sum(int(s["attributes"].get("cache_hit_tokens", 0)) for s in llm_spans)
+        def _attr_int(span: dict, key: str) -> int:
+            attrs = span.get("attributes") if isinstance(span.get("attributes"), dict) else {}
+            try:
+                return int(attrs.get(key, 0) or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        prompt_tokens = sum(_attr_int(s, "prompt_tokens") for s in llm_spans)
+        completion_tokens = sum(_attr_int(s, "completion_tokens") for s in llm_spans)
+        cache_tokens = sum(_attr_int(s, "cache_hit_tokens") for s in llm_spans)
         report["llm"] = {
             "calls": len(llm_spans),
             "prompt_tokens": prompt_tokens,
@@ -144,9 +151,14 @@ def build_report(window: str = DEFAULT_WINDOW, spans: Iterable[dict] | None = No
     if tool_spans:
         by_name: dict[str, int] = {}
         for s in tool_spans:
-            name = s["attributes"].get("tool_name") or s.get("name", "unknown")
+            attrs = s.get("attributes") if isinstance(s.get("attributes"), dict) else {}
+            name = attrs.get("tool_name") or s.get("name", "unknown")
             by_name[name] = by_name.get(name, 0) + 1
-        ok = sum(1 for s in tool_spans if s["attributes"].get("success"))
+        ok = 0
+        for s in tool_spans:
+            attrs = s.get("attributes") if isinstance(s.get("attributes"), dict) else {}
+            if attrs.get("success"):
+                ok += 1
         report["tools"] = {
             "calls": len(tool_spans),
             "success_rate": round(ok / len(tool_spans), 4),
@@ -157,11 +169,20 @@ def build_report(window: str = DEFAULT_WINDOW, spans: Iterable[dict] | None = No
     rag_spans = [s for s in spans if s.get("kind") == "rag"]
     if rag_spans:
         searches = [s for s in rag_spans if s.get("name") == "rag.search"]
-        hits = [int(s["attributes"].get("hit_count", 0)) for s in searches]
+        hits = []
+        for s in searches:
+            attrs = s.get("attributes") if isinstance(s.get("attributes"), dict) else {}
+            try:
+                hits.append(int(attrs.get("hit_count", 0) or 0))
+            except (TypeError, ValueError):
+                hits.append(0)
         report["rag"] = {
             "searches": len(searches),
             "avg_hit_count": round(sum(hits) / len(hits), 2) if hits else 0.0,
-            "degraded_count": sum(1 for s in rag_spans if s["attributes"].get("degraded")),
+            "degraded_count": sum(
+                1 for s in rag_spans
+                if isinstance(s.get("attributes"), dict) and s["attributes"].get("degraded")
+            ),
         }
 
     # ---- 记忆 ----

@@ -5,258 +5,301 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>对话</title>
 <style>
+  /* 颜色、字体、圆角、边框、输入框高度：
+     https://github.com/Yidadaa/ChatGPT-Next-Web/blob/main/app/styles/globals.scss
+     侧栏、会话卡片、标题字号：
+     https://github.com/Yidadaa/ChatGPT-Next-Web/blob/main/app/components/home.module.scss
+     原文 --sidebar-width 是 300px，输入框 max-width 是 50%、min-height 是 36px。
+     下面凡是写「两倍」的，是按你的要求把该文件里的宽度加一倍，不是另定的数。 */
   :root {
-    --sidebar: #f3f4f6;
-    --ink: #1c1c1f;
-    --muted: #6b6e76;
-    --line: #e4e6eb;
-    --user: #e8eaef;
+    --white: white;
+    --black: rgb(48, 48, 48);
+    --gray: rgb(250, 250, 250);
+    --primary: rgb(29, 147, 171);
+    --second: rgb(231, 248, 255);
+    --hover-color: #f3f3f3;
+    --bar-color: rgba(0, 0, 0, 0.1);
+    --shadow: 50px 50px 100px 10px rgb(0, 0, 0, 0.1);
+    --card-shadow: 0px 2px 4px 0px rgb(0, 0, 0, 0.05);
+    --border-in-light: 1px solid rgb(222, 222, 222);
+    --sidebar-width: 600px;
+    --message-max-width: 80%;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
   body {
-    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    color: var(--ink);
-    background: var(--sidebar);
+    background-color: var(--gray);
+    color: var(--black);
+    font-family: "SimSun", "宋体", "STSong", serif;
     display: flex;
-    font-size: 16px;
+    overflow: hidden;
   }
   #sidebar {
-    width: 300px;
-    flex: 0 0 300px;
+    width: var(--sidebar-width);
+    flex: 0 0 var(--sidebar-width);
+    padding: 20px;
+    background-color: var(--second);
+    box-shadow: inset -2px 0px 2px 0px rgb(0, 0, 0, 0.05);
     display: flex;
     flex-direction: column;
-    background: var(--sidebar);
-    border-right: 1px solid var(--line);
   }
-  body.collapsed #sidebar { width: 0; flex-basis: 0; overflow: hidden; border: 0; }
-  .side-head {
-    height: 64px;
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    font-size: 18px;
-    font-weight: 650;
-    border-bottom: 1px solid var(--line);
-  }
-  .side-scroll { flex: 1; overflow-y: auto; }
+  body.collapsed #sidebar { width: 0; flex-basis: 0; padding: 0; overflow: hidden; }
+  .sidebar-title { font-size: 20px; font-weight: bold; padding: 20px 0; }
+  .side-scroll { flex: 1; overflow: auto; }
   .nav-btn, .session-item {
+    display: block;
     width: 100%;
     text-align: left;
-    border: 0;
-    border-bottom: 1px solid var(--line);
-    background: transparent;
-    color: var(--ink);
-    height: 48px;
-    padding: 0 20px;
-    font: inherit;
-    font-size: 15px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background-color: var(--white);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    box-shadow: var(--card-shadow);
+    color: var(--black);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 400;
     cursor: pointer;
   }
-  .nav-btn:hover, .session-item:hover, .nav-btn.active, .session-item.active { background: #fff; }
-  .session-item {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  #stage { flex: 1; min-width: 0; background: #fff; display: flex; flex-direction: column; position: relative; }
+  .nav-btn:hover, .session-item:hover { background-color: var(--hover-color); }
+  .nav-btn.active, .session-item.active { border-color: var(--primary); }
+  #stage { flex: 1; min-width: 0; background: var(--white); display: flex; flex-direction: column; position: relative; }
   .view { display: none; flex: 1; min-height: 0; flex-direction: column; }
   .view.active { display: flex; }
   #fold {
     position: absolute;
-    top: 16px;
-    left: 16px;
+    top: 20px;
+    left: 20px;
     z-index: 2;
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: var(--border-in-light);
+    background: var(--white);
+    box-shadow: var(--card-shadow);
+    font-family: inherit;
     cursor: pointer;
-    font-size: 16px;
   }
-  #thread { flex: 1; overflow-y: auto; padding: 72px 8vw 24px; }
-  body.fresh #thread { flex: 0 0 auto; overflow: visible; padding: 0 8vw; }
+  #thread { flex: 1; overflow: auto; padding: 24px; scroll-behavior: smooth; }
+  :root { --base-font: 16px; }
+  body { font-size: var(--base-font); }
+  .brief { display: flex; flex-direction: column; gap: 14px; font-size: 16px; line-height: 1.75; }
+  .brief-review { color: #666; font-size: 14px; }
+  .brief-q { font-weight: bold; }
+  .brief-opt, .brief-save {
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: var(--border-in-light);
+    background: var(--white);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .brief-opt.on { border-color: var(--primary); }
+  .brief.locked .brief-opt, .brief.locked .brief-custom { pointer-events: none; }
+  #to-bottom {
+    position: absolute;
+    right: 24px;
+    bottom: 120px;
+    z-index: 2;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: var(--border-in-light);
+    background: var(--white);
+    box-shadow: var(--card-shadow);
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #file-names { font-size: 13px; color: var(--black); padding: 0 4px 6px; }
+  #composer { position: relative; }
+  #clear-input { position: absolute; right: 12px; top: 12px; border: 0; background: transparent; color: #888; cursor: pointer; font-size: 18px; }
+  body.fresh #thread { flex: 0 0 auto; }
   body.fresh #chat-view { justify-content: center; }
-  #empty { max-width: 760px; margin: 0 auto 20px; text-align: center; }
-  #empty h1 { font-size: 32px; font-weight: 600; }
-  .row { max-width: 760px; margin: 0 auto 18px; display: flex; }
+  #empty { text-align: center; }
+  #empty h1 { font-size: 20px; font-weight: bold; }
+  .row { display: flex; margin-bottom: 10px; }
   .row.user { justify-content: flex-end; }
   .row.assistant { justify-content: flex-start; }
   .bubble {
-    max-width: 82%;
-    padding: 14px 16px;
-    border-radius: 16px;
-    font-size: 16px;
-    line-height: 1.7;
+    max-width: var(--message-max-width);
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: var(--border-in-light);
+    box-shadow: var(--card-shadow);
+    background: var(--white);
     white-space: pre-wrap;
     word-break: break-word;
+    line-height: 1.75;
+    font-size: 16px;
   }
-  .bubble.user { background: var(--user); }
-  .bubble.assistant { background: #fff; border: 1px solid var(--line); }
-  .reply-text { display: block; }
-  details.tool { margin-top: 10px; color: var(--muted); font-size: 14px; }
-  .usage { margin-top: 10px; color: var(--muted); font-size: 13px; }
-  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .bubble.user { background: var(--second); }
+  .actions { display: flex; gap: 10px; margin-top: 10px; }
   .actions button {
-    height: 30px;
-    padding: 0 10px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    color: var(--muted);
-    font: inherit;
-    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: var(--border-in-light);
+    background: var(--white);
+    box-shadow: var(--card-shadow);
+    font-family: inherit;
+    font-size: 14px;
     cursor: pointer;
   }
-  .actions button.on { color: var(--ink); border-color: #b9bcc4; background: #f6f7f9; }
-  #composer-wrap { padding: 8px 8vw 28px; }
-  body.fresh #composer-wrap { padding-top: 0; }
+  .actions button.on, #search-btn.on { border-color: var(--primary); }
+  .usage, details.tool { margin-top: 10px; color: rgb(166, 166, 166); font-size: 12px; }
+  /* 日期字号和颜色来自 NextChat home.module.scss 的 .chat-item-info / .chat-item-date */
+  .chat-item-info, .msg-time {
+    display: flex;
+    justify-content: space-between;
+    color: rgb(166, 166, 166);
+    font-size: 12px;
+    margin-top: 8px;
+    font-weight: 400;
+  }
+  #composer-wrap { padding: 20px; }
   #composer {
-    max-width: 760px;
-    margin: 0 auto;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 14px 16px;
+    border: var(--border-in-light);
+    border-radius: 20px;
+    box-shadow: var(--card-shadow);
+    background: var(--white);
+    padding: 20px;
   }
   #input {
     width: 100%;
     border: 0;
     resize: none;
     outline: none;
-    font: inherit;
-    font-size: 16px;
-    line-height: 1.6;
-    min-height: 96px;
-    color: var(--ink);
+    min-height: 42px;
+    max-height: 168px;
+    height: 42px;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    line-height: 1.75;
+    font-size: 17px;
+    padding: 8px 44px 8px 4px;
+    font-family: inherit;
+    color: var(--black);
+    background: var(--white);
   }
-  .composer-bar {
-    max-width: 760px;
-    margin: 10px auto 0;
+  .composer-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; }
+  .chip-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .picker { position: relative; }
+  .chip, #model-link, #send, .text-btn {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: var(--border-in-light);
+    background: var(--white);
+    box-shadow: var(--card-shadow);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 400;
+    cursor: pointer;
+  }
+  #send { background: var(--primary); color: white; border: 0; }
+  .menu {
+    position: absolute;
+    left: 0;
+    bottom: 52px;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 3;
   }
-  #model-link {
-    height: 36px;
-    padding: 0 12px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    font: inherit;
-    font-size: 14px;
-    cursor: pointer;
+  .menu[hidden] { display: none; }
+  .chip.on, .text-btn.on { border-color: var(--primary); }
+  .doc { overflow: auto; padding: 20px; }
+  .doc-inner { width: 100%; }
+  .doc h1 { font-size: 24px; font-weight: 600; }
+  .lead { color: rgb(120, 120, 120); font-size: 15px; line-height: 1.7; }
+  .field { margin-top: 20px; }
+  .field label { display: block; cursor: pointer; margin-bottom: 10px; }
+  #find-box, #stop-word, #system-extra {
+    width: 100%;
+    margin-bottom: 10px;
   }
-  #send {
-    width: 36px;
-    height: 36px;
-    border: 0;
-    border-radius: 50%;
-    background: #1c1c1f;
-    color: #fff;
-    cursor: pointer;
-    font-size: 16px;
-  }
-  #send:disabled { opacity: 0.35; }
-  .doc { overflow-y: auto; padding: 88px 32px 48px; }
-  .doc-inner { width: min(640px, 100%); margin: 0 auto; }
-  .doc h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-  .doc .lead { color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
-  .choices { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
-  .choices button, .text-btn {
-    height: 40px;
-    padding: 0 14px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    font: inherit;
-    font-size: 15px;
-    cursor: pointer;
+  .row.hit .bubble { border-color: var(--primary); }
+  .field input, #find-box {
+    appearance: none;
+    border-radius: 10px;
+    border: var(--border-in-light);
+    min-height: 72px;
+    width: 100%;
+    max-width: 100%;
+    background: var(--white);
+    color: var(--black);
+    padding: 0 10px;
+    font-family: inherit;
   }
   #channel-form {
-    margin-top: 8px;
-    padding: 28px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background: #fafafa;
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 20px;
+    border: var(--border-in-light);
+    box-shadow: var(--card-shadow);
+    background: var(--white);
   }
-  #channel-form h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
-  .field { margin-top: 16px; }
-  .field label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
-  .field input {
-    width: 100%;
-    height: 44px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 0 12px;
-    font: inherit;
-    font-size: 16px;
-    background: #fff;
-  }
-  .channel-row {
-    width: 100%;
-    text-align: left;
-    border: 0;
-    border-bottom: 1px solid var(--line);
-    background: transparent;
-    padding: 12px 0;
-    font: inherit;
-    cursor: pointer;
-  }
-  .channel-row.active { font-weight: 650; }
-  .form-error { color: #b42318; margin-top: 10px; font-size: 14px; }
-  .err { color: #b42318; }
+  .form-error { color: rgb(48, 48, 48); }
+  .err { color: rgb(48, 48, 48); }
+  .sidebar-section-title { margin: 22px 4px 10px; color: #777; font-size: 14px; font-weight: 600; }
+  .session-list { padding-left: 12px; border-left: 2px solid rgba(0,0,0,.06); }
 </style>
 </head>
 <body class="fresh">
 <aside id="sidebar">
-  <div class="side-head">对话</div>
+  <div class="sidebar-title">对话</div>
   <div class="side-scroll">
+    <div class="sidebar-section-title">历史会话</div>
+    <input id="find-box" type="text" placeholder="查找消息">
+    <div id="session-list" class="session-list"></div>
+    <div class="sidebar-section-title">功能</div>
     <button class="nav-btn" id="new-chat" type="button">新对话</button>
-    <div id="session-list"></div>
-    <button class="nav-btn" id="channel-btn" type="button">渠道</button>
+    <button class="nav-btn" id="channel-btn" type="button">模型</button>
     <button class="nav-btn" id="help-btn" type="button">帮助</button>
   </div>
 </aside>
 <main id="stage">
-  <button id="fold" type="button" title="收起侧栏">☰</button>
+  <button id="fold" type="button">收起</button>
   <div id="chat-view" class="view active">
+    <button id="to-bottom" type="button" hidden>回到底部</button>
     <div id="thread">
       <div id="empty"><h1>今天想做什么？</h1></div>
     </div>
     <div id="composer-wrap">
       <div id="composer">
         <textarea id="input" rows="3" placeholder="问点什么"></textarea>
-      </div>
-      <div class="composer-bar">
-        <button id="model-link" type="button">未选择渠道</button>
-        <button id="send" type="button">↑</button>
+        <button id="clear-input" type="button" aria-label="清空输入">×</button>
+        <input id="files" type="file" multiple hidden accept="image/*,.pdf,.docx,.pptx,.xlsx,.html,.csv,.txt,.md,.json">
+        <div class="composer-bar">
+          <div class="chip-row">
+            <button id="add-file" class="chip" type="button">+</button>
+            <button id="model-link" class="chip" type="button">还没填模型</button>
+            <button id="mode-btn" class="chip" type="button">聊天</button>
+          </div>
+          <button id="send" type="button">发送</button>
+        </div>
       </div>
     </div>
   </div>
   <section id="help-view" class="view doc">
     <div class="doc-inner">
       <h1>帮助</h1>
-      <p class="lead">回复在气泡里逐字出现。工具过程默认折起。会话只在当前进程里，重启后不再列出。换模型要到「渠道」里改这一条的接口地址、密钥和模型名，三者一起生效。</p>
+      <p class="lead">先打开「模型」，填写接口地址、密钥和模型名，这三项属于同一次连接。填完就能对话。</p>
     </div>
   </section>
   <section id="channel-view" class="view doc">
     <div class="doc-inner">
-      <h1>渠道</h1>
-      <p id="auth-banner" class="form-error" hidden>服务开了访问令牌。打开项目根目录的 .env，把 API_KEY= 后面的值填进下面。这不是模型供应商的密钥。</p>
-      <div class="field">
-        <label for="service-key">本服务令牌</label>
-        <input id="service-key" type="password" placeholder="只填 .env 里的 API_KEY" autocomplete="off">
-      </div>
-      <p class="lead">一条渠道保存接口地址、密钥和模型名。中转站选「自定义」，把地址、密钥、模型名填进下面的表。这里的密钥发给模型供应商。</p>
+      <h1>模型</h1>
+      <p class="lead">和别的网页一样，填接口地址、密钥、模型名。地址要兼容 OpenAI Chat Completions，一般以 /v1 结尾。中转站点「自定义」。</p>
       <div id="channel-list"></div>
       <div class="choices">
-        <button type="button" id="pick-custom">自定义</button>
-        <button type="button" id="pick-deepseek">DeepSeek</button>
-        <button type="button" id="pick-openai">OpenAI</button>
+        <button class="text-btn" type="button" id="pick-deepseek">DeepSeek</button>
+        <button class="text-btn" type="button" id="pick-openai">OpenAI</button>
+        <button class="text-btn" type="button" id="pick-kimi">Kimi</button>
+        <button class="text-btn" type="button" id="pick-minimax">MiniMax</button>
+        <button class="text-btn" type="button" id="pick-zhipu">智谱</button>
       </div>
       <form id="channel-form" hidden>
-        <h2>连接信息</h2>
+        <h2 class="sidebar-title">连接</h2>
         <div class="field" id="model-picker">
           <label for="ch-name">名称</label>
           <input id="ch-name" type="text" placeholder="例如：我的中转站">
@@ -267,16 +310,15 @@
         </div>
         <div class="field">
           <label for="ch-key">密钥</label>
-          <input id="ch-key" type="password" placeholder="供应商给的 key" autocomplete="off">
+          <input id="ch-key" type="password" autocomplete="off">
         </div>
         <div class="field">
-          <label for="ch-model">模型名</label>
-          <input id="ch-model" type="text" placeholder="provider/model">
+          <label>语言模型</label>
+          <div id="model-choices" class="chip-row"></div>
+          <input id="ch-model" type="hidden">
         </div>
         <p id="form-error" class="form-error"></p>
-        <div class="choices">
-        <button type="submit">保存并使用</button>
-      </div>
+        <button class="text-btn" type="submit">保存并使用</button>
       </form>
     </div>
   </section>
@@ -286,100 +328,185 @@ const thread = document.getElementById("thread");
 const empty = document.getElementById("empty");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
+const clearInput = document.getElementById("clear-input");
 const sessionList = document.getElementById("session-list");
 const modelLink = document.getElementById("model-link");
 const channelForm = document.getElementById("channel-form");
 const formError = document.getElementById("form-error");
-const serviceKey = document.getElementById("service-key");
-const authBanner = document.getElementById("auth-banner");
-
 let sessionId = localStorage.getItem("session_id") || null;
+let chatAbort = null;
+sendBtn.onclick = () => {
+  if (chatAbort) { chatAbort.abort(); return; }
+  send();
+};
 let editingId = null;
-let authRequired = false;
-
-serviceKey.value = localStorage.getItem("service_key") || "";
-serviceKey.oninput = () => {
-  localStorage.setItem("service_key", serviceKey.value);
-  paintAuth();
+clearInput.onclick = () => { input.value = ""; resizeInput(); input.focus(); };
+function resizeInput() {
+  input.style.height = "42px";
+  const next = Math.min(Math.max(input.scrollHeight, 42), 168);
+  input.style.height = next + "px";
+  input.style.overflowY = input.scrollHeight > 168 ? "auto" : "hidden";
+}
+input.addEventListener("input", resizeInput);
+resizeInput();
+const addFile = document.getElementById("add-file");
+const fileNode = document.getElementById("files");
+addFile.onclick = () => fileNode.click();
+let chatMode = localStorage.getItem("chat_mode") === "plan" ? "plan" : "chat";
+const modeBtn = document.getElementById("mode-btn");
+function paintMode() { modeBtn.textContent = chatMode === "plan" ? "计划" : "聊天"; }
+paintMode();
+modeBtn.onclick = () => {
+  chatMode = chatMode === "plan" ? "chat" : "plan";
+  localStorage.setItem("chat_mode", chatMode);
+  paintMode();
+};
+fileNode.onchange = () => {
+  addFile.textContent = fileNode.files && fileNode.files.length ? ("+" + fileNode.files.length) : "+";
 };
 
-function paintAuth() {
-  const missing = authRequired && !(localStorage.getItem("service_key") || "").trim();
-  authBanner.hidden = !missing;
-}
-
-function explainHttp(status, text) {
-  if (text.includes("缺少 API Key")) {
-    return "服务要求本服务令牌，这次请求没带。到「渠道」页最上面，填写 .env 里 API_KEY= 后面的值。";
-  }
-  if (text.includes("API Key 无效")) {
-    return "本服务令牌和 .env 里的 API_KEY 不一致。这一栏不要填模型供应商的密钥。";
-  }
-  return "请求失败 " + status + " " + text.slice(0, 200);
-}
-
-function headers() {
-  const h = { "Content-Type": "application/json" };
-  const key = localStorage.getItem("service_key") || "";
-  if (key) h["Authorization"] = "Bearer " + key;
-  return h;
-}
-
+function headers() { return { "Content-Type": "application/json" }; }
 function loadChannels() {
   try { return JSON.parse(localStorage.getItem("channels") || "[]"); }
   catch (e) { return []; }
 }
-function saveChannels(list) {
-  localStorage.setItem("channels", JSON.stringify(list));
+function saveChannels(list) { localStorage.setItem("channels", JSON.stringify(list)); }
+function channelKey(item) {
+  return (item.base_url || "").trim().replace(/\/+$/, "") + "\n" + (item.model || "").trim();
+}
+function loadTranscripts() {
+  try { return JSON.parse(localStorage.getItem("transcripts") || "{}"); }
+  catch (e) { return {}; }
+}
+function snapshot() {
+  if (!sessionId) return;
+  const rows = [];
+  thread.querySelectorAll(".row").forEach((row) => {
+    const bubble = row.querySelector(".bubble");
+    if (!bubble) return;
+    const reply = bubble.querySelector(".reply-text");
+    const usage = bubble.querySelector(".usage");
+    const time = row.querySelector(".msg-time");
+    rows.push({
+      role: row.classList.contains("user") ? "user" : "assistant",
+      text: reply ? reply.textContent : (bubble.querySelector(".user-text") || bubble).textContent,
+      usage: usage ? usage.textContent : "",
+      at: time ? time.dataset.at : "",
+    });
+  });
+  const all = loadTranscripts();
+  all[sessionId] = rows;
+  localStorage.setItem("transcripts", JSON.stringify(all));
+}
+function showEmpty() {
+  thread.innerHTML = "";
+  thread.appendChild(empty);
+  empty.style.display = "";
+  document.body.classList.add("fresh");
+}
+function openSession(id, paintList) {
+  if (sessionId && sessionId !== id && thread.querySelector(".row")) snapshot();
+  sessionId = id;
+  if (id) localStorage.setItem("session_id", id);
+  else localStorage.removeItem("session_id");
+  showEmpty();
+  const rows = id ? (loadTranscripts()[id] || []) : [];
+  rows.forEach((row) => {
+    if (row.role === "user") addUser(row.text || "", row.at);
+    else {
+      const view = addAssistant(row.at);
+      if (typeof row.text === "string" && row.text.startsWith("BRIEF_FORM")) mountBrief(view, row.text);
+      else view.replyNode.appendData(row.text || "");
+      if (row.usage) view.usage.textContent = row.usage;
+    }
+  });
+  showPage("chat");
+  if (paintList !== false) loadSessions();
+}
+function clearCurrentSessionView() {
+  sessionId = null;
+  localStorage.removeItem("session_id");
+  showEmpty();
 }
 function activeChannel() {
   const id = localStorage.getItem("active_channel") || "";
   return loadChannels().find((item) => item.id === id) || null;
 }
+function hostLabel(url) {
+  try { return new URL(url).host; }
+  catch (e) { return url || ""; }
+}
 function paintChip() {
   const item = activeChannel();
-  modelLink.textContent = item ? (item.name + " · " + item.model) : "未选择渠道";
+  modelLink.textContent = item ? (item.model + " · " + hostLabel(item.base_url)) : "还没填模型";
 }
-
 function renderChannels() {
   const box = document.getElementById("channel-list");
   box.innerHTML = "";
   const active = localStorage.getItem("active_channel") || "";
   loadChannels().forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "session-item" + (item.id === active ? " active" : "");
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "channel-row" + (item.id === active ? " active" : "");
-    btn.textContent = item.name + " · " + item.model;
+    btn.className = "nav-btn";
+    btn.textContent = item.model + " · " + hostLabel(item.base_url);
     btn.onclick = () => {
       localStorage.setItem("active_channel", item.id);
       paintChip();
       renderChannels();
     };
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "text-btn";
+    del.textContent = "删除";
+    del.onclick = () => {
+      const next = loadChannels().filter((rowItem) => rowItem.id !== item.id);
+      saveChannels(next);
+      if (active === item.id) localStorage.removeItem("active_channel");
+      paintChip();
+      renderChannels();
+    };
+    row.append(btn, del);
+    box.appendChild(row);
+  });
+}
+const FAMILIES = {
+  deepseek: { name: "DeepSeek", url: "https://api.deepseek.com", models: ["deepseek-flash", "deepseek-v4-pro"] },
+  kimi: { name: "Kimi", url: "https://api.moonshot.cn/v1", models: ["kimi-k2.6", "kimi-k3"] },
+  minimax: { name: "MiniMax", url: "https://api.minimax.cn/v1", models: ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2"] },
+  zhipu: { name: "智谱", url: "https://open.bigmodel.cn/api/paas/v4", models: ["glm-5.3", "glm-5.2", "glm-5.1", "glm-5", "glm-4.7", "glm-4.6"] },
+  openai: { name: "OpenAI", url: "https://api.openai.com/v1", models: ["gpt-4o-mini"] },
+};
+function renderModelChoices(models) {
+  const box = document.getElementById("model-choices");
+  const hidden = document.getElementById("ch-model");
+  box.innerHTML = "";
+  hidden.value = "";
+  models.forEach((name) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.textContent = name;
+    btn.onclick = () => {
+      hidden.value = name;
+      box.querySelectorAll(".chip").forEach((el) => el.classList.toggle("on", el === btn));
+    };
     box.appendChild(btn);
   });
 }
-
 function openForm(preset) {
+  const family = FAMILIES[preset];
+  if (!family) return;
   channelForm.hidden = false;
   formError.textContent = "";
   editingId = null;
-  document.getElementById("ch-name").value = "";
+  document.getElementById("ch-name").value = family.name;
   document.getElementById("ch-key").value = "";
-  if (preset === "deepseek") {
-    document.getElementById("ch-name").value = "DeepSeek";
-    document.getElementById("ch-url").value = "https://api.deepseek.com/v1";
-    document.getElementById("ch-model").value = "deepseek-v4-pro";
-  } else if (preset === "openai") {
-    document.getElementById("ch-name").value = "OpenAI";
-    document.getElementById("ch-url").value = "https://api.openai.com/v1";
-    document.getElementById("ch-model").value = "gpt-4o-mini";
-  } else {
-    document.getElementById("ch-url").value = "";
-    document.getElementById("ch-model").value = "";
-  }
+  document.getElementById("ch-url").value = family.url;
+  renderModelChoices(family.models);
   document.getElementById("ch-key").focus();
 }
-
 channelForm.onsubmit = (e) => {
   e.preventDefault();
   const item = {
@@ -390,19 +517,21 @@ channelForm.onsubmit = (e) => {
     model: document.getElementById("ch-model").value.trim(),
   };
   if (!item.base_url || !item.api_key || !item.model) {
-    formError.textContent = "接口地址、密钥、模型名都要填。";
+    formError.textContent = "先点选一个模型，并填写接口地址和密钥。";
     return;
   }
-  const list = loadChannels().filter((row) => row.id !== item.id);
-  list.unshift(item);
-  saveChannels(list);
+  const list = loadChannels();
+  const same = list.find((row) => channelKey(row) === channelKey(item));
+  if (same) item.id = same.id;
+  const next = list.filter((row) => row.id !== item.id);
+  next.unshift(item);
+  saveChannels(next);
   localStorage.setItem("active_channel", item.id);
   channelForm.hidden = true;
   paintChip();
   renderChannels();
   showPage("chat");
 };
-
 function showPage(name) {
   const page = name === "help" || name === "channel" ? name : "chat";
   document.getElementById("chat-view").classList.toggle("active", page === "chat");
@@ -410,51 +539,221 @@ function showPage(name) {
   document.getElementById("channel-view").classList.toggle("active", page === "channel");
   document.getElementById("help-btn").classList.toggle("active", page === "help");
   document.getElementById("channel-btn").classList.toggle("active", page === "channel");
-  const onEmptyChat = page === "chat" && empty.style.display !== "none";
-  document.body.classList.toggle("fresh", onEmptyChat);
+  document.body.classList.toggle("fresh", page === "chat" && empty.style.display !== "none");
   const target = "#" + page;
   if (location.hash !== target) location.hash = target;
 }
-
-document.getElementById("fold").onclick = () => document.body.classList.toggle("collapsed");
-document.getElementById("new-chat").onclick = () => {
-  sessionId = null;
-  localStorage.removeItem("session_id");
-  thread.innerHTML = "";
-  thread.appendChild(empty);
-  empty.style.display = "";
-  showPage("chat");
-  loadSessions();
-};
-document.getElementById("help-btn").onclick = () => showPage("help");
-document.getElementById("channel-btn").onclick = () => showPage("channel");
-modelLink.onclick = () => showPage("channel");
-document.getElementById("pick-custom").onclick = () => openForm("custom");
-document.getElementById("pick-deepseek").onclick = () => openForm("deepseek");
-document.getElementById("pick-openai").onclick = () => openForm("openai");
-input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
+function bind(id, fn) {
+  const node = document.getElementById(id);
+  if (node) node.onclick = fn;
+}
+bind("fold", () => document.body.classList.toggle("collapsed"));
+bind("new-chat", () => openSession(null));
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
     e.preventDefault();
-    send();
+    openSession(null);
   }
 });
-sendBtn.onclick = () => send();
+bind("help-btn", () => showPage("help"));
+bind("channel-btn", () => showPage("channel"));
+if (modelLink) modelLink.onclick = () => showPage("channel");
+bind("pick-deepseek", () => openForm("deepseek"));
+bind("pick-openai", () => openForm("openai"));
+bind("pick-kimi", () => openForm("kimi"));
+bind("pick-minimax", () => openForm("minimax"));
+bind("pick-zhipu", () => openForm("zhipu"));
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+document.getElementById("find-box").addEventListener("input", (e) => {
+  const q = e.target.value.trim();
+  thread.querySelectorAll(".row").forEach((row) => {
+    const text = row.innerText || "";
+    const hit = q && text.includes(q);
+    row.classList.toggle("hit", hit);
+    if (hit) row.scrollIntoView({ block: "nearest" });
+  });
+});
 window.addEventListener("hashchange", () => showPage(location.hash.slice(1) || "chat"));
 
-function addUser(text) {
+function formatTime(at) {
+  const date = at ? new Date(at) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return date.getFullYear() + "-" + p(date.getMonth() + 1) + "-" + p(date.getDate()) + " " + p(date.getHours()) + ":" + p(date.getMinutes());
+}
+function addTime(parent, at) {
+  const node = document.createElement("div");
+  node.className = "msg-time";
+  const when = at || new Date().toISOString();
+  node.dataset.at = when;
+  node.textContent = formatTime(when);
+  parent.appendChild(node);
+  return node;
+}
+function addUser(text, at) {
   empty.style.display = "none";
   document.body.classList.remove("fresh");
   const row = document.createElement("div");
   row.className = "row user";
   const bubble = document.createElement("div");
   bubble.className = "bubble user";
-  bubble.textContent = text;
+  const body = document.createElement("div");
+  body.className = "user-text";
+  body.textContent = text;
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.textContent = "修改";
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.textContent = "复制";
+  copyBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText(body.textContent); copyBtn.textContent = "已复制"; }
+    catch (e) { copyBtn.textContent = "复制失败"; }
+  };
+  const undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.textContent = "撤回";
+  editBtn.onclick = () => {
+    const next = window.prompt("修改这条消息", body.textContent);
+    if (next == null) return;
+    body.textContent = next.trim();
+    snapshot();
+    loadSessions();
+  };
+  undoBtn.onclick = () => {
+    row.remove();
+    snapshot();
+    loadSessions();
+  };
+  actions.append(copyBtn, editBtn, undoBtn);
+  bubble.append(body, actions);
+  addTime(bubble, at);
   row.appendChild(bubble);
   thread.appendChild(row);
   thread.scrollTop = thread.scrollHeight;
 }
-
-function addAssistant() {
+function mountBrief(view, raw) {
+  let data;
+  try { data = JSON.parse(raw.slice("BRIEF_FORM".length).trim()); }
+  catch (e) { view.replyNode.appendData(raw); return; }
+  view.replyNode.data = "";
+  const box = document.createElement("div");
+  box.className = "brief";
+  const title = document.createElement("div");
+  title.textContent = data.goal || "计划";
+  box.appendChild(title);
+  if (data.review) {
+    const reviewText = (data.review.score == null ? "未评分" : ("质量分 " + data.review.score + "/100"))
+      + (data.review.passes ? " · 已复核 " + data.review.passes + " 轮" : "");
+    data._reviewText = reviewText;
+  }
+  const picks = [];
+  const decisions = data.visible_decisions || (data.asks || []).map((item, index) => ({
+    id: String(index + 1), question: item.ask || "", options: item.options || [], default_index: 0,
+  }));
+  decisions.forEach((item, index) => {
+    const block = document.createElement("div");
+    const q = document.createElement("div");
+    q.className = "brief-q";
+    q.textContent = (index + 1) + ". " + (item.question || item.ask || "");
+    block.appendChild(q);
+    const chosen = { value: (item.options || [])[item.default_index || 0] || "" };
+    (item.options || []).forEach((opt, optIndex) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const isDefault = optIndex === (item.default_index || 0);
+      btn.className = "brief-opt" + (isDefault ? " on" : "");
+      btn.textContent = (isDefault ? "默认 " : "") + opt;
+      btn.onclick = () => {
+        if (box.classList.contains("locked")) return;
+        block.querySelectorAll(".brief-opt").forEach((el) => el.classList.remove("on"));
+        btn.classList.add("on");
+        chosen.value = opt;
+        custom.value = "";
+      };
+      block.appendChild(btn);
+    });
+    const custom = document.createElement("input");
+    custom.className = "brief-custom";
+    custom.placeholder = "要改就写在这里";
+    custom.oninput = () => {
+      if (custom.value.trim()) {
+        block.querySelectorAll(".brief-opt").forEach((el) => el.classList.remove("on"));
+        chosen.value = custom.value.trim();
+      }
+    };
+    block.appendChild(custom);
+    picks.push(chosen);
+    box.appendChild(block);
+  });
+  const hidden = [];
+  (data.hidden_details || []).forEach((item) => {
+    hidden.push(`${item.area || "细节"}：${item.decision || ""}\n验收：${item.acceptance || ""}`);
+  });
+  (data.query_requests || []).forEach((item) => {
+    hidden.push(`待查询：${item.request || item}`);
+  });
+  (data.acceptance || []).forEach((item) => {
+    hidden.push(`验收：${item.test || ""}\n预期：${item.expected || ""}`);
+  });
+  (data.resource_requests || []).forEach((item) => {
+    hidden.push(`资源申请：${item.topic || ""}\n状态：${item.status || "pending"}\n关键词：${(item.search_keywords || []).join("、")}`);
+  });
+  if ((data.notes || []).length) hidden.push("附加信息：\n" + data.notes.join("\n"));
+  if (data._reviewText) {
+    hidden.push("复核状态：" + data._reviewText);
+    if ((data.review.issues || []).length) hidden.push("复核缺口：\n" + data.review.issues.join("\n"));
+  }
+  if (hidden.length) {
+    const extra = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "附加信息";
+    extra.appendChild(summary);
+    const note = document.createElement("div");
+    note.textContent = hidden.join("\n\n");
+    extra.appendChild(note);
+    box.appendChild(extra);
+  }
+  const copyBrief = document.createElement("button");
+  copyBrief.type = "button";
+  copyBrief.className = "brief-save";
+  copyBrief.textContent = "复制计划摘要";
+  copyBrief.onclick = async () => {
+    const lines = [data.goal || "计划"];
+    if (data.review && data.review.score != null) lines.push("质量分：" + data.review.score + "/100");
+    lines.push("已选择：" + picks.map((item, index) => (index + 1) + ". " + item.value).join("；"));
+    if ((data.hidden_details || []).length) lines.push("隐藏细节：\n" + data.hidden_details.map((item) => `${item.area || "细节"}：${item.decision || ""}\n验收：${item.acceptance || ""}`).join("\n\n"));
+    if ((data.query_requests || []).length) lines.push("待查询：\n" + data.query_requests.map((item) => item.request || item).join("\n"));
+    if ((data.resource_requests || []).length) lines.push("资源申请：\n" + data.resource_requests.map((item) => `${item.topic || ""}（${item.status || "pending"}）`).join("\n"));
+    if ((data.acceptance || []).length) lines.push("验收：\n" + data.acceptance.map((item) => item.test || "").join("\n"));
+    if ((data.notes || []).length) lines.push("附加信息：\n" + data.notes.join("\n"));
+    try { await navigator.clipboard.writeText(lines.join("\n\n")); copyBrief.textContent = "已复制摘要"; setTimeout(() => copyBrief.textContent = "复制计划摘要", 1200); }
+    catch (e) { copyBrief.textContent = "复制失败"; setTimeout(() => copyBrief.textContent = "复制计划摘要", 1200); }
+  };
+  box.appendChild(copyBrief);
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "brief-save";
+  save.textContent = "保存";
+  save.onclick = () => {
+    if (box.classList.contains("locked")) return;
+    box.classList.add("locked");
+    const saved = document.createElement("div");
+    saved.textContent = "已保存：" + picks.map((item, index) => (index + 1) + "." + item.value).join("；");
+    box.dataset.copyText = [data.goal || "计划", saved.textContent, (data.notes || []).length ? "附加信息：\n" + data.notes.join("\n") : ""].filter(Boolean).join("\n\n");
+    box.appendChild(saved);
+    save.hidden = true;
+    snapshot();
+  };
+  box.appendChild(save);
+  view.replyText.appendChild(box);
+}
+function addAssistant(at) {
   const row = document.createElement("div");
   row.className = "row assistant";
   const bubble = document.createElement("div");
@@ -466,6 +765,8 @@ function addAssistant() {
   const tools = document.createElement("div");
   const usage = document.createElement("div");
   usage.className = "usage";
+  const refs = document.createElement("div");
+  refs.className = "usage";
   const actions = document.createElement("div");
   actions.className = "actions";
   const copyBtn = document.createElement("button");
@@ -481,93 +782,157 @@ function addAssistant() {
   deleteBtn.type = "button";
   deleteBtn.textContent = "删除";
   copyBtn.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(replyNode.data);
-      copyBtn.textContent = "已复制";
-    } catch (e) {
-      copyBtn.textContent = "复制失败";
-    }
+    const brief = replyText.querySelector(".brief");
+    const text = (brief && brief.dataset.copyText) || replyNode.data;
+    try { await navigator.clipboard.writeText(text); copyBtn.textContent = "已复制"; setTimeout(() => copyBtn.textContent = "复制", 1200); }
+    catch (e) { copyBtn.textContent = "复制失败"; setTimeout(() => copyBtn.textContent = "复制", 1200); }
   };
-  likeBtn.onclick = () => {
-    likeBtn.classList.toggle("on");
-    if (likeBtn.classList.contains("on")) dislikeBtn.classList.remove("on");
-  };
-  dislikeBtn.onclick = () => {
-    dislikeBtn.classList.toggle("on");
-    if (dislikeBtn.classList.contains("on")) likeBtn.classList.remove("on");
-  };
+  likeBtn.onclick = () => { likeBtn.classList.toggle("on"); if (likeBtn.classList.contains("on")) dislikeBtn.classList.remove("on"); };
+  dislikeBtn.onclick = () => { dislikeBtn.classList.toggle("on"); if (dislikeBtn.classList.contains("on")) likeBtn.classList.remove("on"); };
   deleteBtn.onclick = () => row.remove();
-  actions.appendChild(copyBtn);
-  actions.appendChild(likeBtn);
-  actions.appendChild(dislikeBtn);
-  actions.appendChild(deleteBtn);
-  bubble.appendChild(replyText);
-  bubble.appendChild(tools);
-  bubble.appendChild(usage);
-  bubble.appendChild(actions);
+  actions.append(copyBtn, likeBtn, dislikeBtn, deleteBtn);
+  const notice = document.createElement("div");
+  notice.className = "usage";
+  notice.textContent = "内容由AI生成，仅供参考";
+  bubble.append(replyText, tools, refs, usage, notice, actions);
+  addTime(bubble, at);
   row.appendChild(bubble);
   thread.appendChild(row);
-  return { replyText, replyNode, tools, usage };
+  return { replyText, replyNode, tools, refs, usage };
 }
-
-function appendTool(tools, name) {
+function appendTool(tools, refs, name, args) {
+  if (tools.querySelector('details[data-tool-name="' + CSS.escape(String(name)) + '"]')) return;
   const box = document.createElement("details");
   box.className = "tool";
+  box.dataset.toolName = String(name);
   const summary = document.createElement("summary");
   summary.textContent = "已调用 " + name;
   box.appendChild(summary);
   tools.appendChild(box);
+  if (name !== "fetch_url" || !args) return;
+  let url = "";
+  try { url = JSON.parse(args).url || ""; } catch (e) { return; }
+  if (!url) return;
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.textContent = url;
+  refs.appendChild(link);
+  refs.appendChild(document.createElement("br"));
 }
-
 function renderUsage(node, prompt, completion, approx) {
-  if (prompt == null) {
-    node.textContent = approx ? ("生成中 · 约 " + approx + " 字") : "";
-    return;
-  }
+  if (prompt == null) { node.textContent = approx ? ("生成中 · 约 " + approx + " 字") : ""; return; }
   node.textContent = "输入 " + prompt + " · 输出 " + completion + " · 合计 " + (prompt + completion);
 }
-
+function sessionTitle(id) {
+  const rows = loadTranscripts()[id] || [];
+  const first = rows.find((row) => row.role === "user" && row.text);
+  return first ? first.text.slice(0, 18) : id;
+}
+function sessionTime(id) {
+  const rows = loadTranscripts()[id] || [];
+  const last = rows[rows.length - 1];
+  return last && last.at ? formatTime(last.at) : "";
+}
+function addSessionButton(id) {
+  if (sessionList.querySelector('[data-session-id="' + CSS.escape(String(id)) + '"]')) return;
+  const row = document.createElement("div");
+  row.className = "session-item" + (id === sessionId ? " active" : "");
+  row.dataset.sessionId = String(id);
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "nav-btn";
+  const title = document.createElement("span");
+  title.textContent = sessionTitle(id);
+  const info = document.createElement("span");
+  info.className = "chat-item-info";
+  info.textContent = sessionTime(id);
+  btn.append(title, info);
+  btn.onclick = () => openSession(id);
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "text-btn";
+  del.textContent = "删除";
+  del.onclick = async (e) => {
+    e.stopPropagation();
+    const all = loadTranscripts();
+    delete all[id];
+    localStorage.setItem("transcripts", JSON.stringify(all));
+    try { await fetch("/sessions/" + id, { method: "DELETE", headers: headers() }); } catch (err) {}
+    if (sessionId === id) clearCurrentSessionView();
+    loadSessions();
+  };
+  row.append(btn, del);
+  sessionList.appendChild(row);
+}
 async function loadSessions() {
+  const requestId = (loadSessions.requestId || 0) + 1;
+  loadSessions.requestId = requestId;
   sessionList.innerHTML = "";
+  const seen = new Set();
   try {
     const resp = await fetch("/sessions", { headers: headers() });
-    if (!resp.ok) return;
-    const data = await resp.json();
-    (data.sessions || []).forEach((item) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "session-item" + (item.id === sessionId ? " active" : "");
-      btn.textContent = item.id;
-      btn.onclick = () => {
-        sessionId = item.id;
-        localStorage.setItem("session_id", item.id);
-        showPage("chat");
-        loadSessions();
-      };
-      sessionList.appendChild(btn);
-    });
+    if (resp.ok && requestId === loadSessions.requestId) {
+      const data = await resp.json();
+      (data.sessions || []).forEach((item) => {
+        seen.add(item.id);
+        addSessionButton(item.id);
+      });
+    }
   } catch (e) {}
+  if (requestId !== loadSessions.requestId) return;
+  Object.keys(loadTranscripts()).forEach((id) => {
+    if (!seen.has(id)) addSessionButton(id);
+  });
 }
-
+function readAttachments() {
+  const node = document.getElementById("files");
+  const files = node && node.files ? Array.from(node.files).slice(0, 6) : [];
+  return Promise.all(files.map((file) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result || "");
+      const mark = raw.indexOf(",");
+      resolve({
+        name: file.name,
+        mime: file.type || "application/octet-stream",
+        data_base64: mark >= 0 ? raw.slice(mark + 1) : "",
+      });
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  }))).then((rows) => rows.filter(Boolean));
+}
+function canSeeImages(model) {
+  const name = (model || "").toLowerCase();
+  return ["gpt-4o", "gpt-4.1", "gpt-4-turbo", "gemini", "claude-3", "claude-4", "-vl", "qwen-vl", "glm-4v"].some((key) => name.includes(key));
+}
 async function send() {
   const text = input.value.trim();
-  if (!text) return;
+  const picked = fileNode && fileNode.files ? Array.from(fileNode.files) : [];
+  if (!text && !picked.length) return;
   const channel = activeChannel();
-  input.value = "";
-  sendBtn.disabled = true;
-  addUser(text);
-  const view = addAssistant();
-  if (authRequired && !(localStorage.getItem("service_key") || "").trim()) {
-    view.replyNode.appendData("还没填本服务令牌。到「渠道」页最上面，填写 .env 里 API_KEY= 后面的值。");
+  const hasImage = picked.some((file) => (file.type || "").startsWith("image/"));
+  if (hasImage && channel && !canSeeImages(channel.model)) {
+    input.value = "";
+    if (fileNode) fileNode.value = "";
+    addUser(text || "（图片）");
+    const view = addAssistant();
+    view.replyNode.appendData("当前模型不能看图片，图片没有发送。请换成带视觉的模型，例如 gpt-4o-mini。");
     view.replyText.classList.add("err");
-    showPage("channel");
-    serviceKey.focus();
-    sendBtn.disabled = false;
     return;
   }
+  input.value = "";
+  resizeInput();
+  sendBtn.textContent = "停止";
+  chatAbort = new AbortController();
+  addUser(text);
+  const view = addAssistant();
   if (!channel) {
-    view.replyNode.appendData("还没有渠道。打开左侧「渠道」，选自定义或预设，填接口地址、密钥和模型名。");
-    sendBtn.disabled = false;
+    view.replyNode.appendData("还没填模型。打开左侧「模型」，填写接口地址、密钥和模型名。");
+    sendBtn.textContent = "发送";
+    chatAbort = null;
     return;
   }
   let chars = 0;
@@ -576,17 +941,22 @@ async function send() {
     const resp = await fetch("/chat/stream", {
       method: "POST",
       headers: headers(),
+      signal: chatAbort.signal,
       body: JSON.stringify({
         message: text,
         session_id: sessionId,
         model: channel.model,
         api_key: channel.api_key,
         base_url: channel.base_url,
+        temperature: 0.2,
+        max_tokens: 4096,
+        mode: chatMode,
+        attachments: await readAttachments(),
       }),
     });
     if (!resp.ok) {
       const errText = await resp.text();
-      view.replyNode.appendData(explainHttp(resp.status, errText));
+      view.replyNode.appendData("连接失败 " + resp.status + " " + errText.slice(0, 180));
       view.replyText.classList.add("err");
       return;
     }
@@ -602,57 +972,73 @@ async function send() {
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         let event;
-        try { event = JSON.parse(line.slice(6)); }
-        catch (e) { continue; }
-        if (event.type === "session") {
+        try { event = JSON.parse(line.slice(6)); } catch (e) { continue; }
+        if (event.type === "status") {
+          if (view.usage && !view.usage.dataset.final) view.usage.textContent = event.text || "";
+        } else if (event.type === "session") {
           sessionId = event.session_id;
           localStorage.setItem("session_id", sessionId);
         } else if (event.type === "delta") {
           if (typeof event.content === "string" && event.content.startsWith("\n\n---\n")) continue;
-          view.replyNode.appendData(event.content || "");
+          if (typeof event.content === "string" && event.content.startsWith("BRIEF_FORM")) {
+            mountBrief(view, event.content);
+          } else view.replyNode.appendData(event.content || "");
           chars += (event.content || "").length;
           if (!view.usage.dataset.final) renderUsage(view.usage, null, null, chars);
         } else if (event.type === "tool_call") {
-          appendTool(view.tools, event.name || "工具");
+          appendTool(view.tools, view.refs, event.name || "工具", event.args || "");
         } else if (event.type === "usage") {
           view.usage.dataset.final = "1";
           renderUsage(view.usage, event.prompt_tokens || 0, event.completion_tokens || 0);
         } else if (event.type === "done") {
-          if (!view.replyNode.data.trim()) view.replyNode.appendData(event.reply || "（空回复）");
+          if (view.usage && view.usage.textContent.indexOf("正在") === 0) view.usage.textContent = "";
+          if (!view.replyText.querySelector(".brief") && view.replyNode.data.includes("```")) {
+            view.replyNode.data = view.replyNode.data.replace(/```[\s\S]*?```/g, "这里不写代码。");
+          }
+    if (!view.replyNode.data.trim() && !view.replyText.querySelector(".brief")) view.replyNode.appendData(event.reply || "（空回复）");
         } else if (event.type === "error") {
-          view.replyNode.appendData(event.message || "出错");
+          const raw = event.message || "出错";
+          const blocked = raw.includes("审核") || raw.includes("违规") || raw.includes("敏感");
+          view.replyNode.appendData(blocked ? ("内容没有通过审核，请改一下再发。" + raw) : raw);
           view.replyText.classList.add("err");
         }
         thread.scrollTop = thread.scrollHeight;
       }
     }
-    if (!view.replyNode.data.trim()) {
+    if (!view.replyNode.data.trim() && !view.replyText.querySelector(".brief")) {
       view.replyNode.appendData("没有收到回复");
       view.replyText.classList.add("err");
     }
   } catch (e) {
-    view.replyNode.appendData("请求失败: " + e.message);
-    view.replyText.classList.add("err");
+    if (e.name === "AbortError") view.replyNode.appendData("已停止");
+    else {
+      view.replyNode.appendData("连接失败: " + e.message);
+      view.replyText.classList.add("err");
+    }
   } finally {
+    sendBtn.textContent = "发送";
+    chatAbort = null;
+    if (fileNode) { fileNode.value = ""; }
+    if (addFile) addFile.textContent = "+";
+    chatAbort = null;
+    snapshot();
     sendBtn.disabled = false;
     input.focus();
     loadSessions();
   }
 }
-
+const toBottom = document.getElementById("to-bottom");
+toBottom.onclick = () => { thread.scrollTop = thread.scrollHeight; };
+thread.addEventListener("scroll", () => {
+  const gap = thread.scrollHeight - thread.scrollTop - thread.clientHeight;
+  toBottom.hidden = gap < 80;
+});
 paintChip();
 renderChannels();
-loadSessions();
+if (sessionId) openSession(sessionId);
+else loadSessions();
 if (!["#chat", "#help", "#channel"].includes(location.hash)) location.hash = "chat";
 else showPage(location.hash.slice(1));
-fetch("/health").then((resp) => resp.json()).then((data) => {
-  authRequired = !!data.auth_required;
-  paintAuth();
-  if (authRequired && !(localStorage.getItem("service_key") || "").trim()) {
-    showPage("channel");
-    serviceKey.focus();
-  }
-}).catch(() => {});
 </script>
 </body>
 </html>

@@ -5,24 +5,17 @@ OpenAI 客户端初始化，其他文件调用使用   from config import client
 """
 
 import os
-from pathlib import Path
 from openai import OpenAI, AsyncOpenAI
-from dotenv import load_dotenv
-
-
-load_dotenv(
-    dotenv_path=Path(__file__).resolve().parent.parent / ".env"
-)  # 自动读取 agent-stack/.env 文件
 
 #  非流式客户端实体
 client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
+    api_key=os.getenv("OPENAI_API_KEY") or "not-configured",
     base_url=os.getenv("OPENAI_BASE_URL","https://api.openai.com/v1")
 )
 
 #  流式客户端实体
 aclient = AsyncOpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
+    api_key=os.getenv("OPENAI_API_KEY") or "not-configured",
     base_url=os.getenv("OPENAI_BASE_URL","https://api.openai.com/v1")
 )
 
@@ -38,6 +31,6 @@ def make_client(api_key: str | None, base_url: str | None) -> AsyncOpenAI:
     if not key and not url:
         return aclient
     return AsyncOpenAI(
-        api_key=key or os.getenv("OPENAI_API_KEY"),
+        api_key=key or os.getenv("OPENAI_API_KEY") or "not-configured",
         base_url=url or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1",
     )

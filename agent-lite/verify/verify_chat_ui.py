@@ -51,6 +51,9 @@ def main() -> int:
         ("model-picker", "没有模型选择"),
         ("base_url", "请求体没有接口地址"),
         ("复制", "没有复制按钮"),
+        ("复制计划摘要", "没有计划摘要复制"),
+        ("!view.replyText.querySelector(\".brief\")", "没有保护计划卡片免于空回复误判"),
+        ("setTimeout(() => copyBtn.textContent", "复制按钮没有复位"),
     ]
     for needle, label in checks:
         if needle not in html:

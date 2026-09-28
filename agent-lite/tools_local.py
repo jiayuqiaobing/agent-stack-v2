@@ -6,10 +6,14 @@ agent-lite/tools_local.py
 
 import asyncio
 import ast
+import json
 import operator
 import os
 import logging
+import re
 from datetime import datetime
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +90,67 @@ async def get_current_time() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _fetch_url_sync(url: str) -> str:
+    target = (url or "").strip()
+    if not target.startswith("http://") and not target.startswith("https://"):
+        return "错误: 只接受 http 或 https 地址"
+    request = Request(target, headers={"User-Agent": "agent-lite"})
+    try:
+        with urlopen(request, timeout=12) as response:
+            raw = response.read(200_000)
+            charset = response.headers.get_content_charset() or "utf-8"
+    except URLError as e:
+        return f"错误: 打不开这个地址: {e.reason}"
+    text = raw.decode(charset, errors="replace")
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return "错误: 页面没有可读文字"
+    if len(text) > 4000:
+        text = text[:4000] + " ...(已截断)"
+    return text
+
+
+async def fetch_url(url: str) -> str:
+    """读取一个网页的正文，供回答时引用"""
+    return await asyncio.to_thread(_fetch_url_sync, url)
+
+
+def _weather_sync(city: str, day: str = "today") -> str:
+    target = (city or "").strip()
+    if not target:
+        return "错误: 没有城市名"
+    request = Request(
+        f"https://wttr.in/{target}?format=j1",
+        headers={"User-Agent": "agent-lite"},
+    )
+    try:
+        with urlopen(request, timeout=8) as response:
+            data = json.loads(response.read().decode("utf-8", errors="replace"))
+    except (URLError, json.JSONDecodeError, TimeoutError) as e:
+        return f"错误: 天气查询失败: {e}"
+    days = data.get("weather") or []
+    index = {"today": 0, "tomorrow": 1, "the_day_after_tomorrow": 2}.get(day, 0)
+    if day == "all":
+        picked = days
+    else:
+        picked = days[index:index + 1]
+    if not picked:
+        return "错误: 没有这一天的天气"
+    lines = []
+    for item in picked:
+        hourly = item.get("hourly") or [{}]
+        desc = ((hourly[min(4, len(hourly) - 1)].get("weatherDesc") or [{}])[0]).get("value") or ""
+        lines.append(f"{item.get('date')}：{desc}，{item.get('mintempC')}°C ~ {item.get('maxtempC')}°C")
+    return "\n".join(lines)
+
+
+async def get_weather(city: str, day: str = "today") -> str:
+    """查询城市天气。进程内调用，不另开 MCP 进程。"""
+    return await asyncio.to_thread(_weather_sync, city, day)
+
+
 # ============================================================================
 # 工具注册表 — 名称 → 异步函数
 # ============================================================================
@@ -94,6 +159,8 @@ TOOL_REGISTRY = {
     "calculate": safe_calculate,
     "read_file": safe_read_file,
     "get_time": get_current_time,
+    "fetch_url": fetch_url,
+    "get_weather": get_weather,
 }
 
 
@@ -144,19 +211,60 @@ GET_TIME_TOOL = {
     },
 }
 
-LOCAL_TOOLS = [CALCULATOR_TOOL, READ_FILE_TOOL, GET_TIME_TOOL]
+FETCH_URL_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "fetch_url",
+        "description": "打开用户给出的 http 或 https 网页，读取正文。用户提到网上的内容、梗、新闻或链接时必须先调用，不要只凭记忆。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "完整网址，以 http:// 或 https:// 开头"}
+            },
+            "required": ["url"],
+        },
+    },
+}
+
+
+WEATHER_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "查询城市天气，今天、明天或后天。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {"type": "string", "description": "城市名，如北京"},
+                "day": {
+                    "type": "string",
+                    "description": "today / tomorrow / the_day_after_tomorrow / all",
+                },
+            },
+            "required": ["city"],
+        },
+    },
+}
+
+
+LOCAL_TOOLS = [CALCULATOR_TOOL, READ_FILE_TOOL, GET_TIME_TOOL, FETCH_URL_TOOL, WEATHER_TOOL]
 
 
 # ============================================================================
 # 工具执行分发器
 # ============================================================================
 
-async def execute_tool(name: str, args: dict) -> str:
+async def execute_tool(name: str, args: dict | None) -> str:
     """根据工具名分发到对应异步函数"""
+    if not isinstance(args, dict):
+        args = {}
     if name not in TOOL_REGISTRY:
         return f"错误: 未知工具 '{name}'"
     try:
         return str(await TOOL_REGISTRY[name](**args))
+    except TypeError as e:
+        logger.warning("工具 %s 参数不对：%s", name, e)
+        return f"错误: 工具 '{name}' 参数不完整"
     except Exception as e:
         logger.warning("工具 %s 执行失败：%s", name, e)
         return f"工具执行错误: {e}"

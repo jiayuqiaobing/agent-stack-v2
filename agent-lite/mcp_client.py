@@ -51,7 +51,7 @@ async def setup_mcp_connections():
         cleanup:            async 清理函数，在 lifespan 关闭阶段调用
     """
     local_config = {
-        "enabled": True,
+        "enabled": os.getenv("MCP_LOCAL_ENABLED", "0").strip() == "1",
         # 必须用 sys.executable 而不是裸 "python"：
         # 裸 "python" 会解析到系统/base 解释器，可能没装 mcp 依赖（实测踩过）。
         # 用 sys.executable 保证子进程与当前服务用同一个解释器。
@@ -126,7 +126,7 @@ async def setup_mcp_connections():
                 await cm.__aexit__(None, None, None)
             except Exception as e:
                 logger.debug("关闭 transport 时异常（%s）：%s", label, e)
-        logger.info("所有 MCP 连接已关闭")
+        logger.info("MCP 连接已关闭：%d 个", len(_cleanup_stack))
 
     return all_remote_tools, tool_session_map, cleanup
 

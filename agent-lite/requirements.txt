@@ -8,3 +8,6 @@ fastembed~=0.8.0
 python-dotenv~=1.2.1
 pytest~=9.1.0
 pytest-asyncio~=1.4.0
+markitdown[pdf,docx,pptx,xlsx]~=0.1.7
+docling~=2.70.0
+playwright~=1.55.0

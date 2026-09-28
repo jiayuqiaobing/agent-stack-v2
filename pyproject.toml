@@ -1,0 +1,16 @@
+[project]
+name = "agent-stack"
+version = "0.2.0"
+description = "手写的多会话 AI Agent：追问、按需工具、会话记忆、链路日志。"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+
+[project.scripts]
+agent-stack = "main:main"
+
+[tool.setuptools]
+package-dir = {"" = "agent-lite"}
+
+[tool.setuptools.packages.find]
+where = ["agent-lite"]

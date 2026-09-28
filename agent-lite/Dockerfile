@@ -11,6 +11,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright 的 Python 包不包含浏览器内核；浏览器工具运行前必须安装 Chromium。
+RUN python -m playwright install --with-deps chromium
+
 # 复制源码
 COPY . .
 
