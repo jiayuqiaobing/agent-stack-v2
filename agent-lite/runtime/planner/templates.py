@@ -11,6 +11,7 @@ TEMPLATES = {
             "桌面端、窄屏和浏览器兼容",
             "可执行的视觉与功能验收",
         ),
+        "capabilities": ("browser_acceptance", "responsive", "accessibility", "visual_acceptance"),
     },
     "web_game": {
         "label": "网页游戏",
@@ -26,30 +27,49 @@ TEMPLATES = {
             "动画时序、音效限制、失焦暂停和移动端触控",
             "真实浏览器打开、交互、窄屏、失焦和十分钟压力测试",
         ),
+        "capabilities": ("browser_acceptance", "responsive", "state_machine", "invariants", "stress_test"),
     },
     "crawler": {
         "label": "爬取与数据工具",
         "triggers": ("爬取", "爬虫", "课表", "抓取", "采集"),
         "required_sections": ("授权", "数据来源", "字段映射", "失败重试", "隐私", "验收"),
         "checks": ("登录/授权和反爬边界", "数据变化与重复数据", "敏感信息和失败恢复"),
+        "capabilities": ("authorization", "privacy", "source_validity", "retry_policy"),
+    },
+    "timetable": {
+        "label": "课表导入软件",
+        "triggers": ("课表软件", "课表", "课程表", "大学课表"),
+        "required_sections": ("授权", "导入方式", "字段映射", "学期周次", "冲突处理", "隐私", "验收"),
+        "checks": (
+            "学校官网登录/授权和禁止绕过的限制",
+            "HTML、图片、PDF、接口或人工导入的来源差异",
+            "课程、教师、教室、周次、节次和单双周字段映射",
+            "重复课程、调课、跨周和时间冲突处理",
+            "隐私数据不上传、不记录密码、失败后可重试",
+        ),
+        "capabilities": ("authorization", "privacy", "source_validity", "retry_policy"),
     },
     "software": {
         "label": "软件项目",
         "triggers": ("软件", "工具", "桌面应用", "客户端", "应用程序"),
         "required_sections": ("模块", "状态", "权限", "配置", "错误恢复", "发布", "验收"),
         "checks": ("模块职责和数据流", "安装/配置/升级", "崩溃恢复与系统兼容"),
+        "capabilities": ("module_boundaries", "permissions", "configuration", "crash_recovery"),
     },
     "general": {
         "label": "通用项目",
         "triggers": (),
         "required_sections": ("目标", "范围", "步骤", "验收", "风险"),
         "checks": ("目标边界、可执行步骤、完成证据和阻塞项"),
+        "capabilities": (),
     },
 }
 
 
 def classify(text: str) -> str:
     value = text or ""
+    if any(word in value for word in ("课表软件", "课程表软件", "大学课表软件")):
+        return "timetable"
     for name in ("web_game", "crawler", "web", "software"):
         if any(trigger in value for trigger in TEMPLATES[name]["triggers"]):
             return name

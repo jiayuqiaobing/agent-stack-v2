@@ -110,7 +110,6 @@
     font-family: inherit;
     cursor: pointer;
   }
-  #file-names { font-size: 13px; color: var(--black); padding: 0 4px 6px; }
   #composer { position: relative; }
   #clear-input { position: absolute; right: 12px; top: 12px; border: 0; background: transparent; color: #888; cursor: pointer; font-size: 18px; }
   body.fresh #thread { flex: 0 0 auto; }
@@ -144,7 +143,7 @@
     font-size: 14px;
     cursor: pointer;
   }
-  .actions button.on, #search-btn.on { border-color: var(--primary); }
+  .actions button.on { border-color: var(--primary); }
   .usage, details.tool { margin-top: 10px; color: rgb(166, 166, 166); font-size: 12px; }
   /* 日期字号和颜色来自 NextChat home.module.scss 的 .chat-item-info / .chat-item-date */
   .chat-item-info, .msg-time {
@@ -213,7 +212,7 @@
   .lead { color: rgb(120, 120, 120); font-size: 15px; line-height: 1.7; }
   .field { margin-top: 20px; }
   .field label { display: block; cursor: pointer; margin-bottom: 10px; }
-  #find-box, #stop-word, #system-extra {
+  #find-box {
     width: 100%;
     margin-bottom: 10px;
   }
@@ -335,6 +334,8 @@ const channelForm = document.getElementById("channel-form");
 const formError = document.getElementById("form-error");
 let sessionId = localStorage.getItem("session_id") || null;
 let chatAbort = null;
+let activeRequest = null;
+let requestSequence = 0;
 sendBtn.onclick = () => {
   if (chatAbort) { chatAbort.abort(); return; }
   send();
@@ -389,7 +390,7 @@ function snapshot() {
     const time = row.querySelector(".msg-time");
     rows.push({
       role: row.classList.contains("user") ? "user" : "assistant",
-      text: reply ? reply.textContent : (bubble.querySelector(".user-text") || bubble).textContent,
+      text: row.dataset.rawReply || (reply ? reply.textContent : (bubble.querySelector(".user-text") || bubble).textContent),
       usage: usage ? usage.textContent : "",
       at: time ? time.dataset.at : "",
     });
@@ -405,7 +406,13 @@ function showEmpty() {
   document.body.classList.add("fresh");
 }
 function openSession(id, paintList) {
-  if (sessionId && sessionId !== id && thread.querySelector(".row")) snapshot();
+  const previousSessionId = sessionId;
+  const switching = previousSessionId !== id;
+  if (switching) requestSequence += 1;
+  if (chatAbort) chatAbort.abort();
+  activeRequest = null;
+  chatAbort = null;
+  if (previousSessionId && switching && thread.querySelector(".row")) snapshot();
   sessionId = id;
   if (id) localStorage.setItem("session_id", id);
   else localStorage.removeItem("session_id");
@@ -641,7 +648,13 @@ function mountBrief(view, raw) {
   let data;
   try { data = JSON.parse(raw.slice("BRIEF_FORM".length).trim()); }
   catch (e) { view.replyNode.appendData(raw); return; }
+  if (view.row) view.row.dataset.rawReply = raw;
   view.replyNode.data = "";
+  function persist() {
+    data.visible_decisions = decisions.map((item, index) => ({...item, selected: picks[index] && picks[index].value}));
+    if (view.row) view.row.dataset.rawReply = "BRIEF_FORM\n" + JSON.stringify(data);
+    snapshot();
+  }
   const box = document.createElement("div");
   box.className = "brief";
   const title = document.createElement("div");
@@ -662,12 +675,12 @@ function mountBrief(view, raw) {
     q.className = "brief-q";
     q.textContent = (index + 1) + ". " + (item.question || item.ask || "");
     block.appendChild(q);
-    const chosen = { value: (item.options || [])[item.default_index || 0] || "" };
+    const chosen = { value: item.selected || (item.options || [])[item.default_index || 0] || "" };
     (item.options || []).forEach((opt, optIndex) => {
       const btn = document.createElement("button");
       btn.type = "button";
       const isDefault = optIndex === (item.default_index || 0);
-      btn.className = "brief-opt" + (isDefault ? " on" : "");
+      btn.className = "brief-opt" + (opt === chosen.value ? " on" : "");
       btn.textContent = (isDefault ? "默认 " : "") + opt;
       btn.onclick = () => {
         if (box.classList.contains("locked")) return;
@@ -675,6 +688,7 @@ function mountBrief(view, raw) {
         btn.classList.add("on");
         chosen.value = opt;
         custom.value = "";
+        persist();
       };
       block.appendChild(btn);
     });
@@ -685,6 +699,7 @@ function mountBrief(view, raw) {
       if (custom.value.trim()) {
         block.querySelectorAll(".brief-opt").forEach((el) => el.classList.remove("on"));
         chosen.value = custom.value.trim();
+        persist();
       }
     };
     block.appendChild(custom);
@@ -745,6 +760,8 @@ function mountBrief(view, raw) {
     box.classList.add("locked");
     const saved = document.createElement("div");
     saved.textContent = "已保存：" + picks.map((item, index) => (index + 1) + "." + item.value).join("；");
+    data.visible_decisions = decisions.map((item, index) => ({...item, selected: picks[index].value}));
+    if (view.row) view.row.dataset.rawReply = "BRIEF_FORM\n" + JSON.stringify(data);
     box.dataset.copyText = [data.goal || "计划", saved.textContent, (data.notes || []).length ? "附加信息：\n" + data.notes.join("\n") : ""].filter(Boolean).join("\n\n");
     box.appendChild(saved);
     save.hidden = true;
@@ -798,7 +815,7 @@ function addAssistant(at) {
   addTime(bubble, at);
   row.appendChild(bubble);
   thread.appendChild(row);
-  return { replyText, replyNode, tools, refs, usage };
+  return { row, replyText, replyNode, tools, refs, usage };
 }
 function appendTool(tools, refs, name, args) {
   if (tools.querySelector('details[data-tool-name="' + CSS.escape(String(name)) + '"]')) return;
@@ -929,6 +946,9 @@ async function send() {
   chatAbort = new AbortController();
   addUser(text);
   const view = addAssistant();
+  const requestId = ++requestSequence;
+  let requestSessionId = sessionId;
+  activeRequest = {id: requestId, sessionId: requestSessionId, row: view.row};
   if (!channel) {
     view.replyNode.appendData("还没填模型。打开左侧「模型」，填写接口地址、密钥和模型名。");
     sendBtn.textContent = "发送";
@@ -944,7 +964,7 @@ async function send() {
       signal: chatAbort.signal,
       body: JSON.stringify({
         message: text,
-        session_id: sessionId,
+        session_id: requestSessionId,
         model: channel.model,
         api_key: channel.api_key,
         base_url: channel.base_url,
@@ -973,10 +993,17 @@ async function send() {
         if (!line.startsWith("data: ")) continue;
         let event;
         try { event = JSON.parse(line.slice(6)); } catch (e) { continue; }
+        if (!activeRequest || activeRequest.id !== requestId) continue;
         if (event.type === "status") {
           if (view.usage && !view.usage.dataset.final) view.usage.textContent = event.text || "";
         } else if (event.type === "session") {
+          if (requestSessionId && event.session_id !== requestSessionId) {
+            console.warn("忽略请求返回的异步 session 变更", event.session_id);
+            continue;
+          }
           sessionId = event.session_id;
+          requestSessionId = event.session_id;
+          if (activeRequest && activeRequest.id === requestId) activeRequest.sessionId = event.session_id;
           localStorage.setItem("session_id", sessionId);
         } else if (event.type === "delta") {
           if (typeof event.content === "string" && event.content.startsWith("\n\n---\n")) continue;
@@ -995,7 +1022,7 @@ async function send() {
           if (!view.replyText.querySelector(".brief") && view.replyNode.data.includes("```")) {
             view.replyNode.data = view.replyNode.data.replace(/```[\s\S]*?```/g, "这里不写代码。");
           }
-    if (!view.replyNode.data.trim() && !view.replyText.querySelector(".brief")) view.replyNode.appendData(event.reply || "（空回复）");
+          if (!view.replyNode.data.trim() && !view.replyText.querySelector(".brief")) view.replyNode.appendData(event.reply || "（空回复）");
         } else if (event.type === "error") {
           const raw = event.message || "出错";
           const blocked = raw.includes("审核") || raw.includes("违规") || raw.includes("敏感");
@@ -1005,26 +1032,31 @@ async function send() {
         thread.scrollTop = thread.scrollHeight;
       }
     }
-    if (!view.replyNode.data.trim() && !view.replyText.querySelector(".brief")) {
+    if (activeRequest && activeRequest.id === requestId && !view.replyNode.data.trim() && !view.replyText.querySelector(".brief")) {
       view.replyNode.appendData("没有收到回复");
       view.replyText.classList.add("err");
     }
   } catch (e) {
+    if (!activeRequest || activeRequest.id !== requestId) return;
     if (e.name === "AbortError") view.replyNode.appendData("已停止");
     else {
       view.replyNode.appendData("连接失败: " + e.message);
       view.replyText.classList.add("err");
     }
   } finally {
-    sendBtn.textContent = "发送";
-    chatAbort = null;
-    if (fileNode) { fileNode.value = ""; }
-    if (addFile) addFile.textContent = "+";
-    chatAbort = null;
-    snapshot();
-    sendBtn.disabled = false;
-    input.focus();
-    loadSessions();
+    if (activeRequest && activeRequest.id === requestId) {
+      sendBtn.textContent = "发送";
+      chatAbort = null;
+      activeRequest = null;
+    }
+    if (activeRequest && activeRequest.id === requestId) {
+      if (fileNode) { fileNode.value = ""; }
+      if (addFile) addFile.textContent = "+";
+      snapshot();
+      sendBtn.disabled = false;
+      input.focus();
+      loadSessions();
+    }
   }
 }
 const toBottom = document.getElementById("to-bottom");

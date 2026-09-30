@@ -54,6 +54,15 @@ def main() -> int:
         ("复制计划摘要", "没有计划摘要复制"),
         ("!view.replyText.querySelector(\".brief\")", "没有保护计划卡片免于空回复误判"),
         ("setTimeout(() => copyBtn.textContent", "复制按钮没有复位"),
+        ("if (chatAbort) chatAbort.abort()", "切换/发送时没有中止旧请求"),
+        ("activeRequest", "请求没有绑定当前会话"),
+        ("dataset.rawReply", "计划结构没有保存原始数据"),
+        ("if (activeRequest && activeRequest.id === requestId)", "旧请求仍可能执行 finally 污染当前会话"),
+        ("activeRequest.id !== requestId", "流式事件没有使用请求生命周期判断"),
+        ("session_id: requestSessionId", "请求体没有冻结创建请求时的会话 ID"),
+        ("function persist()", "计划选择没有实时持久化"),
+        ("persist();", "计划选择变更没有触发快照"),
+        ("if (previousSessionId && switching && thread.querySelector(\".row\")) snapshot()", "切换前没有保存当前会话快照"),
     ]
     for needle, label in checks:
         if needle not in html:
@@ -67,6 +76,10 @@ def main() -> int:
         ok = False
     else:
         print("[OK] 未用 textContent += 写回复")
+
+    if 'activeRequest.row && activeRequest.row.isConnected' in html:
+        print("[FAIL] 切换会话仍会删除未完成消息")
+        ok = False
 
     if not ok:
         print("[FAIL] verify_chat_ui")

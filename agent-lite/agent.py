@@ -11,7 +11,7 @@ from memory import HybridMemory
 from tools_local import LOCAL_TOOLS
 from runtime.assist import prepare_turn
 from runtime.phase import Phase, phase_hint
-from runtime.planner.prompts import build_plan_hint
+from runtime.planner.prompts import build_turn_plan_context
 from runtime.registry import ToolRegistry
 from runtime.brief import fallback_brief, recover_brief, review_brief
 from mcp import ClientSession
@@ -86,7 +86,7 @@ async def agent_loop(
     if plan["note"]:
         memory.extra_system = ((getattr(memory, "extra_system", "") or "") + "\n\n" + plan["note"]).strip()
     if mode == "plan":
-        memory.extra_system = ((getattr(memory, "extra_system", "") or "") + "\n\n" + build_plan_hint(user_message, "计划拆解")).strip()
+        memory.extra_system = ((getattr(memory, "extra_system", "") or "") + "\n\n" + build_turn_plan_context(user_message)).strip()
 
     memory.add("user", user_message)
     await memory.maybe_summarize()
@@ -292,6 +292,8 @@ async def agent_loop_stream(
         return
     if plan["note"]:
         memory.extra_system = ((getattr(memory, "extra_system", "") or "") + "\n\n" + plan["note"]).strip()
+    if mode == "plan":
+        memory.extra_system = ((getattr(memory, "extra_system", "") or "") + "\n\n" + build_turn_plan_context(user_message)).strip()
 
     memory.add("user", user_message)
     await memory.maybe_summarize()

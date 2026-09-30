@@ -43,8 +43,9 @@ def main() -> None:
     page_tool = prepare_turn("用浏览器打开网页", [], None)
     assert "open_page" in [item["function"]["name"] for item in page_tool["tools"]]
     from runtime.brief import fallback_brief, render_brief
-    from runtime.planner.prompts import build_plan_hint
+    from runtime.planner.prompts import build_plan_hint, build_refinement_hint, build_turn_plan_context, is_plan_refinement
     from runtime.planner.templates import classify
+    from runtime.planner.coverage import coverage_for
     wide = render_brief({"goal": "网站", "items": [{"id": "1", "need": "页面", "options": ["一种", "两种"]}]})
     assert wide.startswith("错误"), wide
     asks = [{"id": str(i), "need": "项" + str(i), "options": ["页面上先放一个能点的入口，点开进入下一步", "另一项"]} for i in range(12)]
@@ -116,9 +117,18 @@ def main() -> None:
     assert fallback_brief("网页").startswith("BRIEF_FORM")
     assert classify("制作俄罗斯方块网页") == "web_game"
     assert classify("爬取学校课表") == "crawler"
+    assert classify("制作大学课表软件") == "timetable"
     assert "状态机" in build_plan_hint("制作俄罗斯方块网页", "拆解")
     assert "坐标约定" in build_plan_hint("制作俄罗斯方块网页", "拆解")
     assert "真实浏览器验收" in build_plan_hint("制作俄罗斯方块网页", "拆解")
+    assert is_plan_refinement("把刚才的任务再拆得更细一点")
+    assert is_plan_refinement("回问自己，把已有步骤拆解得更细")
+    assert not is_plan_refinement("怎么创建一个新网页")
+    assert "不是在提出新项目" in build_refinement_hint()
+    assert "项目类型" in build_turn_plan_context("制作俄罗斯方块网页")
+    coverage = coverage_for("web_game")
+    assert "task_facts" in coverage["core"]
+    assert "state_machine" in coverage["specialized"]
     cooking = json.loads(fallback_brief("怎样做一道番茄炒蛋")[len("BRIEF_FORM"):])
     assert len(cooking["visible_decisions"]) == 12
     assert "准备食材" in cooking["visible_decisions"][0]["question"]
