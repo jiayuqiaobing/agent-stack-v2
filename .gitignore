@@ -29,6 +29,7 @@ logs/
 agent-lite/logs/
 chroma_db/
 agent-lite/chroma_db/
+agent-lite/data/
 # eval/results/ 下：只保留基线，其余（每次运行的历史）不入库
 #
 # ⚠️ 这里有个 gitignore 的坑：**不能写成 `eval/results/` + `!baseline.json`** ——

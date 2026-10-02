@@ -15,6 +15,9 @@ from memory import HybridMemory
 from config import client, MODEL_NAME, make_client
 from auth import verify_api_key
 from observability import trace
+from runtime.chat_log import delete_session as delete_saved_session
+from runtime.chat_log import list_sessions as list_saved_sessions
+from runtime.chat_log import load_messages
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +99,9 @@ def _get_or_create_session(
     sessions[new_id] = HybridMemory(
         system_prompt=system_prompt, client=client, session_id=new_id
     )
+    sessions[new_id].persist = True
+    for row in load_messages(new_id):
+        sessions[new_id].short_term.append({"role": row["role"], "content": row["text"]})
     logger.info(
         "创建新 session：%s（当前共 %d 个，工具 %d 个）",
         new_id, len(sessions), len(tools or []),
@@ -235,20 +241,26 @@ async def chat_stream(body: ChatRequest, request: Request):
 @router.get("/sessions", dependencies=[Depends(verify_api_key)])
 async def list_sessions():
     """列出所有活跃 session 及统计信息"""
-    return {
-        "count": len(sessions),
-        "sessions": [
-            {"id": sid, **mem.stats()} for sid, mem in sessions.items()
-        ],
-    }
+    saved = {row["id"]: row for row in list_saved_sessions()}
+    for sid, mem in sessions.items():
+        row = saved.setdefault(sid, {"id": sid, "title": "", "updated_at": ""})
+        row.update(mem.stats())
+    rows = list(saved.values())
+    return {"count": len(rows), "sessions": rows}
+
+
+@router.get("/sessions/{session_id}/messages", dependencies=[Depends(verify_api_key)])
+async def session_messages(session_id: str):
+    """刷新页面时取回已完成的消息。打开着的页面不走这里。"""
+    return {"messages": load_messages(session_id)}
 
 
 @router.delete("/sessions/{session_id}", dependencies=[Depends(verify_api_key)])
 async def delete_session(session_id: str):
     """清空并删除指定 session"""
-    if session_id not in sessions:
-        return {"error": "session 不存在"}
-    sessions[session_id].clear()
-    del sessions[session_id]
+    delete_saved_session(session_id)
+    memory = sessions.pop(session_id, None)
+    if memory:
+        memory.clear()
     logger.info("删除 session：%s（剩余 %d 个）", session_id, len(sessions))
     return {"status": "ok", "remaining": len(sessions)}

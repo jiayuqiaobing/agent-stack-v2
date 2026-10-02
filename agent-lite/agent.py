@@ -105,7 +105,7 @@ async def agent_loop(
     for step in range(1, max_steps + 1):
         logger.debug("Step %d/%d 阶段 %s", step, max_steps, phase.value)
 
-        memory.phase_hint = phase_hint(phase, plan_mode)
+        memory.phase_hint = phase_hint(phase, plan_mode, user_message)
         context = await memory.build_context()
         _attach_images(context, getattr(memory, "turn_images", None))
 
@@ -314,7 +314,7 @@ async def agent_loop_stream(
     for step in range(1, max_steps + 1):
         logger.debug("Step %d/%d（流式）阶段 %s", step, max_steps, phase.value)
 
-        memory.phase_hint = phase_hint(phase, plan_mode)
+        memory.phase_hint = phase_hint(phase, plan_mode, user_message)
         context = await memory.build_context()
         _attach_images(context, getattr(memory, "turn_images", None))
 

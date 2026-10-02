@@ -88,6 +88,7 @@ def _empty_report(window: str) -> dict:
         "tools": {"calls": 0, "success_rate": 0.0, "by_name": {}},
         "rag": {"searches": 0, "avg_hit_count": 0.0, "degraded_count": 0},
         "memory": {"summarize_calls": 0},
+        "errors_by_type": {},
         "hints": [],
     }
 
@@ -209,4 +210,12 @@ def build_report(window: str = DEFAULT_WINDOW, spans: Iterable[dict] | None = No
         hints.append(f"工具成功率 {report['tools']['success_rate']:.1%} 偏低（<90%）")
 
     report["hints"] = hints
+    errors_by_type: dict[str, int] = {}
+    for span in spans:
+        if span.get("status") != "error":
+            continue
+        err = span.get("error") if isinstance(span.get("error"), dict) else {}
+        name = str(err.get("type") or "unknown")
+        errors_by_type[name] = errors_by_type.get(name, 0) + 1
+    report["errors_by_type"] = errors_by_type
     return report

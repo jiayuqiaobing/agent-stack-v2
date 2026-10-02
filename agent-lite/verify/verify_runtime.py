@@ -116,11 +116,21 @@ def main() -> None:
     assert "未复核草稿" in preserved, preserved
     assert fallback_brief("网页").startswith("BRIEF_FORM")
     assert classify("制作俄罗斯方块网页") == "web_game"
+    assert classify("制作扫雷网页") == "web_game"
     assert classify("爬取学校课表") == "crawler"
     assert classify("制作大学课表软件") == "timetable"
-    assert "状态机" in build_plan_hint("制作俄罗斯方块网页", "拆解")
-    assert "坐标约定" in build_plan_hint("制作俄罗斯方块网页", "拆解")
-    assert "真实浏览器验收" in build_plan_hint("制作俄罗斯方块网页", "拆解")
+    assert classify("怎么写一本科幻小说") == "unmatched"
+    assert classify("制作一个记账软件") == "software"
+    from runtime.planner.templates import TEMPLATES
+    assert "general" not in TEMPLATES
+    mine_hint = build_plan_hint("制作扫雷网页", "拆解")
+    for word in ("坐标", "状态机", "不变量", "规则数据", "真实浏览器验收"):
+        assert word in mine_hint, word
+    crawler_hint = build_plan_hint("爬取学校课表", "拆解")
+    for word in ("来源", "字段", "授权", "失败重试"):
+        assert word in crawler_hint, word
+    assert "状态机" not in build_plan_hint("制作一个记账软件", "拆解")
+    assert "页面结构" not in build_plan_hint("怎么写一本科幻小说", "拆解")
     assert is_plan_refinement("把刚才的任务再拆得更细一点")
     assert is_plan_refinement("回问自己，把已有步骤拆解得更细")
     assert not is_plan_refinement("怎么创建一个新网页")
@@ -132,8 +142,27 @@ def main() -> None:
     cooking = json.loads(fallback_brief("怎样做一道番茄炒蛋")[len("BRIEF_FORM"):])
     assert len(cooking["visible_decisions"]) == 12
     assert "准备食材" in cooking["visible_decisions"][0]["question"]
-    web_fallback = json.loads(fallback_brief("创建一个扫雷网页")[len("BRIEF_FORM"):])
-    assert len(web_fallback["visible_decisions"]) == 6
+    samples = ["怎么写一本科幻小说", "制作一个记账软件", "制作扫雷网页", "爬取学校课表"]
+    parsed = [json.loads(fallback_brief(goal)[len("BRIEF_FORM"):]) for goal in samples]
+    pairs = [(left, right) for index, left in enumerate(parsed) for right in parsed[index + 1:]]
+    for left, right in pairs:
+        left_titles = [item["question"] for item in left["visible_decisions"]]
+        right_titles = [item["question"] for item in right["visible_decisions"]]
+        assert not (set(left_titles) & set(right_titles))
+        for sentence in [item["options"][0] for item in left["visible_decisions"]]:
+            for other in [item["options"][0] for item in right["visible_decisions"]]:
+                assert sentence not in other and other not in sentence
+    novel = fallback_brief("怎么写一本科幻小说")
+    for word in ("页面结构", "视觉层级", "核心功能", "模块", "权限", "安装"):
+        assert word not in novel, word
+    software = fallback_brief("制作一个记账软件")
+    for word in ("坐标", "状态机", "科幻"):
+        assert word not in software, word
+    mine = fallback_brief("制作扫雷网页")
+    assert "页面结构" not in [item["question"] for item in json.loads(mine[len("BRIEF_FORM"):])["visible_decisions"]]
+    crawler = fallback_brief("爬取学校课表")
+    assert json.loads(crawler[len("BRIEF_FORM"):])["task_type"] == "crawler"
+    assert "页面结构" not in crawler
     structured = json.loads(done[len("BRIEF_FORM"):]) if done.startswith("BRIEF_FORM") else {}
     assert {"visible_decisions", "hidden_details", "query_requests", "resource_requests", "acceptance", "review"}.issubset(structured)
     assert all(2 <= len(item["options"]) <= 3 for item in structured["visible_decisions"])

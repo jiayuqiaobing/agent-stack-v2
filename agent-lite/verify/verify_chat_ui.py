@@ -54,15 +54,14 @@ def main() -> int:
         ("复制计划摘要", "没有计划摘要复制"),
         ("!view.replyText.querySelector(\".brief\")", "没有保护计划卡片免于空回复误判"),
         ("setTimeout(() => copyBtn.textContent", "复制按钮没有复位"),
-        ("if (chatAbort) chatAbort.abort()", "切换/发送时没有中止旧请求"),
-        ("activeRequest", "请求没有绑定当前会话"),
+        ("controller.abort()", "停止时没有中止当前面板自己的请求"),
+        ("panels.get", "切换时没有保留原来的会话面板"),
         ("dataset.rawReply", "计划结构没有保存原始数据"),
-        ("if (activeRequest && activeRequest.id === requestId)", "旧请求仍可能执行 finally 污染当前会话"),
-        ("activeRequest.id !== requestId", "流式事件没有使用请求生命周期判断"),
+        ("home.requestId !== requestId", "流式事件没有绑定发出它的那一个面板"),
         ("session_id: requestSessionId", "请求体没有冻结创建请求时的会话 ID"),
         ("function persist()", "计划选择没有实时持久化"),
         ("persist();", "计划选择变更没有触发快照"),
-        ("if (previousSessionId && switching && thread.querySelector(\".row\")) snapshot()", "切换前没有保存当前会话快照"),
+        ("/messages", "刷新后没有从会话记录取回消息"),
     ]
     for needle, label in checks:
         if needle not in html:
@@ -80,6 +79,14 @@ def main() -> int:
     if 'activeRequest.row && activeRequest.row.isConnected' in html:
         print("[FAIL] 切换会话仍会删除未完成消息")
         ok = False
+    start = html.find("function openSession")
+    end = html.find("function restorePanel")
+    body = html[start:end]
+    if "abort(" in body or "innerHTML" in body:
+        print("[FAIL] 切换会话仍会中断请求或清空页面")
+        ok = False
+    else:
+        print("[OK] 切换会话不中断、不清空")
 
     if not ok:
         print("[FAIL] verify_chat_ui")

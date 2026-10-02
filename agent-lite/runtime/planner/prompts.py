@@ -21,15 +21,30 @@ def is_plan_refinement(text: str) -> bool:
 
 def build_plan_hint(user_text: str, phase: str) -> str:
     template = template_for(user_text)
+    goal = (user_text or "").strip() or "当前问题"
+    if template["name"] == "unmatched":
+        return (
+            f"项目类型：未匹配。用户原话：{goal}。当前阶段：{phase}。"
+            "没有命中网页、网页游戏、爬虫、软件或课表，禁止套用这些类型的章节。"
+            "先用 web_search 和 open_page 查这句原话的成熟做法，再写只属于这句话的计划。"
+            "查不到就把来源标为 pending，不要编网址，也不要借用其他任务的章节名来充数。"
+            "可见标题和默认句必须写出这句原话，不能和其他问题共用。"
+        )
     sections = "、".join(template["required_sections"])
     checks = "；".join(template["checks"])
+    specific = ""
+    if template["name"] in ("web", "web_game"):
+        specific += "网页任务必须区分静态检查与真实浏览器验收。"
+    if template["name"] == "web_game":
+        specific += "游戏任务必须写坐标系、状态机、不变量、规则数据和可重复测试步骤。"
     return (
         f"项目类型：{template['label']}（{template['name']}）。"
-        f"当前阶段：{phase}。"
-        f"必须覆盖：{sections}。"
-        f"重点检查：{checks}。"
+        f"用户原话：{goal}。当前阶段：{phase}。"
+        f"隐藏检查：{sections}。重点检查：{checks}。"
+        "这些检查放进隐藏细节，不要把章节名抄成可见标题。"
+        "可见项只写会改变这句原话路线的选择，默认句必须包含原话里的对象。"
         "用户已明确的偏好直接成为默认，不再询问；只有改变整体路线或需要许可/付费才列为可见决策。"
-        "网页任务必须区分静态检查与真实浏览器验收；游戏任务必须写坐标系、状态机、不变量、规则数据和可重复测试步骤。"
+        + specific
     )
 
 

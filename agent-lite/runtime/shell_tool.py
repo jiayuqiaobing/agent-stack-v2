@@ -30,7 +30,7 @@ async def run_command(command: str) -> str:
     if not text:
         return "错误: 没有命令"
     lowered = text.lower()
-    if any(flag in lowered for flag in _BLOCK):
+    if any(flag in lowered for flag in _BLOCK) or ".." in text or lowered.startswith("cd ") or " cd " in lowered:
         return "错误: 这条命令不允许执行"
     try:
         proc = await asyncio.create_subprocess_shell(

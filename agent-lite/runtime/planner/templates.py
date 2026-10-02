@@ -56,13 +56,14 @@ TEMPLATES = {
         "checks": ("模块职责和数据流", "安装/配置/升级", "崩溃恢复与系统兼容"),
         "capabilities": ("module_boundaries", "permissions", "configuration", "crash_recovery"),
     },
-    "general": {
-        "label": "通用项目",
-        "triggers": (),
-        "required_sections": ("目标", "范围", "步骤", "验收", "风险"),
-        "checks": ("目标边界、可执行步骤、完成证据和阻塞项"),
-        "capabilities": (),
-    },
+}
+
+UNMATCHED = {
+    "label": "未匹配",
+    "triggers": (),
+    "required_sections": (),
+    "checks": (),
+    "capabilities": (),
 }
 
 
@@ -73,11 +74,11 @@ def classify(text: str) -> str:
     for name in ("web_game", "crawler", "web", "software"):
         if any(trigger in value for trigger in TEMPLATES[name]["triggers"]):
             return name
-    return "general"
+    return "unmatched"
 
 
 def template_for(text: str) -> dict:
     name = classify(text)
-    result = dict(TEMPLATES[name])
+    result = dict(TEMPLATES[name]) if name in TEMPLATES else dict(UNMATCHED)
     result["name"] = name
     return result

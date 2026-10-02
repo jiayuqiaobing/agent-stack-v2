@@ -20,9 +20,9 @@ PHASE_HINTS = {
 }
 
 
-def phase_hint(phase: Phase, plan: bool = False) -> str:
+def phase_hint(phase: Phase, plan: bool = False, user_text: str = "") -> str:
     if plan and phase == Phase.TOOL:
-        return "当前是计划。" + build_plan_hint("", "查资料") + "先看本会话已经说过的需求，再用 web_search 查现成流程。查完必须调用 make_brief。"
+        return "当前是计划。" + build_plan_hint(user_text, "查资料") + "先看本会话已经说过的需求，再用 web_search 查这句原话的成熟做法。查完必须调用 make_brief。不要套用与这句原话无关的固定章节。"
     if plan and phase == Phase.ANSWER:
         return "当前是计划的结果。不要改写选项，不要补代码。"
     if not plan and phase == Phase.TOOL:

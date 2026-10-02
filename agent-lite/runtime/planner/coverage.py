@@ -16,7 +16,7 @@ TEMPLATE_CAPABILITIES = {
     "crawler": {"authorization", "privacy", "source_validity", "retry_policy"},
     "timetable": {"authorization", "privacy", "source_validity", "retry_policy"},
     "software": {"module_boundaries", "permissions", "configuration", "crash_recovery"},
-    "general": set(),
+    "unmatched": set(),
 }
 
 

@@ -9,7 +9,7 @@ Use `AGENTS.md`, `LESSONS.md`, `docs/5-工作协议.md`, `docs/6-项目结构哲
 
 ## Non-negotiable boundaries
 
-- Never modify `agent-lite/tests/`.
+- Tests live in `agent-lite/tests/`. A failure is fixed in the implementation, never by weakening the assertion.
 - Never read `.env`; use `.env.example` for configuration shape.
 - Never push or commit unless explicitly requested.
 - Do not add a new capability to `agent.py` or `tools_local.py` when it belongs in `agent-lite/runtime/<capability>.py`.

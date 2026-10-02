@@ -68,6 +68,7 @@ class HybridMemory:
         msg = {"role":role,"content":content}
         msg.update(extra)
         self.short_term.append(msg)
+        self._remember(role, content)
         logger.debug("短期记忆 +1：role=%s, content_len=%d", role, len(content))
 
     def add_assistant_with_tool_calls(self,msg) -> None:
@@ -95,6 +96,7 @@ class HybridMemory:
         if reasoning:
             stored["reasoning_content"] = reasoning
         self.short_term.append(stored)
+        self._remember("assistant", stored["content"])
         logger.debug("短期记忆 +1（工具调用）：%d 个 tool_call", len(msg.tool_calls))
 
     def _safe_messages(self) -> list[dict]:
@@ -341,6 +343,15 @@ class HybridMemory:
             return "未找到相关内容"
 
         return "\n---\n".join(results[-5:])
+
+    def _remember(self, role: str, content: str) -> None:
+        if not getattr(self, "persist", False):
+            return
+        try:
+            from runtime.chat_log import append_message
+            append_message(self.session_id, role, content or "")
+        except Exception:
+            logger.warning("会话记录写入失败 session=%s", self.session_id, exc_info=True)
 
     def clear(self) -> None:
         """放弃当前对话,删除长期记忆（已经保存到Chroma），作用是清空上下文"""

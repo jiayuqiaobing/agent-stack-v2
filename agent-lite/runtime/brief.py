@@ -15,7 +15,7 @@ BRIEF = {
     "type": "function",
     "function": {
         "name": "make_brief",
-        "description": "先读本会话里用户已经说过的话，再在一次调用中完整提供 goal 和 items。至少 12 条；每条都必须有 need、ask 和至少两个 options，options 第一项是结合用户偏好的可直接执行默认项，不能只写「需要」或「经典」。不能省略 items。",
+        "description": "先读本会话里用户已经说过的话，再在一次调用中完整提供 goal 和 items。条目只写这句原话自己的步骤，不要套用别的任务的章节。每条都必须有 need、ask 和至少两个 options，options 第一项是结合用户偏好的可直接执行默认项，不能只写「需要」或「经典」。不能省略 items。",
         "parameters": {
             "type": "object",
             "properties": {
@@ -133,8 +133,11 @@ def render_brief(data: dict) -> str:
             "method": "manual_or_browser",
             "severity": "must_pass",
         })
-    if len(legacy_asks) < 12:
-        return "错误: 至少 12 条。页面结构、每页做什么、外观、操作、输赢、重来、不会做的地方，都要分开。默认项要能直接做。"
+    minimum = 12 if _is_simple_life_task(goal) else 2
+    if len(legacy_asks) < minimum:
+        if _is_simple_life_task(goal):
+            return "错误: 生活任务至少 12 条可执行步骤，每条只写一件事。"
+        return "错误: 至少写出两步，每一步只属于这句原话。不要补与这句话无关的章节。"
     notes = [str(item).strip() for item in (data.get("notes") or []) if str(item).strip()]
     query_requests = list(dict.fromkeys(query_requests))
     payload = json.dumps({
@@ -157,7 +160,7 @@ def render_brief(data: dict) -> str:
 def make_brief(args: dict | None) -> str:
     data = args if isinstance(args, dict) else {}
     if not isinstance(data.get("items"), list):
-        return "错误: make_brief 参数不完整。请在同一次工具调用中提供 goal 和 items 数组；items 至少12条，每条含 need、ask、options，options第一项是具体默认步骤。不要直接回答用户。"
+        return "错误: make_brief 参数不完整。请在同一次调用中提供 goal 和 items 数组；每条含 need、ask、options，options第一项是这句原话的具体默认步骤。不要直接回答用户。"
     try:
         if isinstance(data.get("items"), str):
             data["items"] = json.loads(data["items"])
@@ -185,20 +188,7 @@ def fallback_brief(goal: str) -> str:
             ("最终检查", "确认分量、熟度、味道和摆盘都符合这次用餐需求"),
         ]
     else:
-        topics = [
-        ("目标范围", f"先明确{subject}要解决的核心问题、服务对象和完成边界"),
-        ("页面结构", "先确定入口页、主要内容页和结果页，并规定页面之间的进入顺序"),
-        ("核心功能", "先实现用户完成主要任务所需的最小功能，再处理扩展功能"),
-        ("主要操作", "为每个核心功能规定用户点击、输入、返回和失败后的下一步"),
-        ("状态反馈", "每个耗时操作显示进行中、成功和失败三种状态，并保留可理解的错误原因"),
-        ("视觉层级", "用一个主色、一个强调色和中性背景区分主要操作、次要操作和内容区域"),
-        ("响应布局", "桌面端保持主内容清晰，窄屏时内容缩放并保证主要按钮仍可操作"),
-        ("空状态", "没有数据或首次进入时显示下一步说明，不显示空白页面"),
-        ("错误恢复", "失败时保留用户输入和当前状态，提供重试或返回上一步"),
-        ("数据边界", "明确哪些数据必须保存、哪些只在当前操作中使用，并限制不必要的输入"),
-        ("验收路径", "按正常流程、空输入、错误输入、重复操作和窄屏场景逐项检查"),
-        ("交付结果", "最后整理页面清单、功能清单、默认选择和未解决附加信息"),
-        ]
+        return _pending_fallback(subject)
     asks = [{
         "id": str(index + 1),
         "need": name,
@@ -238,6 +228,63 @@ def fallback_brief(goal: str) -> str:
         "asks": asks,
         "notes": ["计划恢复模型不可用，以上为保守兜底结构；需要外部许可或付费的事项尚未确认。"],
         "review": {"status": "fallback", "score": None, "issues": ["未完成模型复核"]},
+    }
+    return "BRIEF_FORM\n" + json.dumps(payload, ensure_ascii=False)
+
+
+def _pending_fallback(subject: str) -> str:
+    """恢复失败时只保留这句话本身。不使用一份给所有任务共用的章节表。"""
+    template = template_for(subject)
+    question = f"「{subject}」先查清什么"
+    default = f"先检索「{subject}」已经验证过的做法和失败情况；没查到就保持待查询，不借用别的任务的步骤"
+    alternate = f"若暂时不能检索，就只记下「{subject}」已有事实，缺的来源标为待查询"
+    hidden = [{
+        "id": "accept",
+        "area": "验收",
+        "decision": f"只验收「{subject}」是否按查到的做法做完",
+        "reason": "检索未完成",
+        "acceptance": f"能逐项指出「{subject}」的完成证据，或明确还缺哪一条来源",
+    }, {
+        "id": "risk",
+        "area": "风险",
+        "decision": f"「{subject}」在来源仍为待查询时，不能把未证实的步骤交给工作模型执行",
+        "reason": "检索未完成",
+        "acceptance": "未查到来源的条目保持 pending",
+    }]
+    checks = list(template["required_sections"]) + list(template["checks"])
+    for index, check in enumerate(checks, start=1):
+        hidden.append({
+            "id": f"check-{index}",
+            "area": template["label"],
+            "decision": f"「{subject}」还需核对：{check}",
+            "reason": "仅此类型的失败检查，不作为可见标题",
+            "acceptance": f"「{subject}」这一项要么有检索依据，要么保持待查询",
+        })
+    payload = {
+        "version": "2.0",
+        "goal": subject,
+        "task_type": template["name"],
+        "visible_decisions": [{
+            "id": "1",
+            "question": question,
+            "options": [default, alternate],
+            "default_index": 0,
+        }],
+        "hidden_details": hidden,
+        "query_requests": [{"request": subject, "status": "pending"}],
+        "resource_requests": [{
+            "topic": subject,
+            "status": "pending",
+            "search_keywords": [subject],
+        }],
+        "acceptance": [{
+            "test": f"核对「{subject}」的步骤是否都来自这句原话或已检索的做法",
+            "expected": "没有把别的任务的章节写进来",
+        }],
+        "assumptions": [],
+        "asks": [{"id": "1", "need": subject, "ask": question, "options": [default, alternate]}],
+        "notes": ["检索未完成。此卡只属于这句原话，不是通用模板。"],
+        "review": {"status": "fallback", "score": None, "issues": ["检索未完成"]},
     }
     return "BRIEF_FORM\n" + json.dumps(payload, ensure_ascii=False)
 
@@ -302,10 +349,10 @@ async def review_brief(draft_text: str, history: list, llm, model: str) -> str:
     ]
     system = (
         "你是独立的需求计划审查员。先读会话，尤其是用户已经表达的偏好和目标；不得把已明确的信息再次设为问题。"
-        "检查页面/功能覆盖、顺序、单项是否可执行、默认是否合理、选项是否有帮助、是否遗漏关键障碍。"
-        "合并重复项，补足缺项；第一选项必须是结合会话线索后最适合直接实施的默认。"
+        "检查这句原话的步骤是否可执行、默认是否合理、是否遗漏关键障碍。不要把别的任务的章节补进来。"
+        "合并重复项；第一选项必须是结合会话线索后最适合直接实施的默认。"
         "只输出 JSON：{\"score\":0到100整数,\"issues\":[\"具体缺口\"],\"items\":[{\"id\":\"1\",\"need\":\"...\",\"ask\":\"...\",\"options\":[\"默认，具体可执行\",\"替代项\"]}],\"notes\":[\"仅列必须用户自行申请许可或付费的关卡\"]}。"
-        "至少12项。禁止代码。"
+        "禁止代码。不同问题不得输出同一套标题。"
     )
     current = draft
     review = None
@@ -388,8 +435,8 @@ async def recover_brief(history: list, llm, model: str) -> str:
             "role": "system",
             "content": (
                 "你是计划结构恢复器。根据会话内容生成完整 JSON，不要解释，不要代码。"
-                "必须包含 goal、items、notes。items 至少12条；每条含 id、need、ask、options，"
-                "options 至少两项，第一项是具体可执行默认。只输出 JSON。"
+                "必须包含 goal、items、notes。每条含 id、need、ask、options，"
+                "options 至少两项，第一项是这句原话的具体可执行默认。不要套用其他任务的章节。只输出 JSON。"
             ),
         }
     ]
